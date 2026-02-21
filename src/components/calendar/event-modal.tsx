@@ -133,7 +133,7 @@ export function EventModal({
 
   const isMultiDay = startDate !== endDate;
 
-  // ── Date picker sheet (bottom slide-up) ──────────────────────────────────
+  // ── Date picker dialog (centered) ────────────────────────────────────────
   const DateSheet = () => {
     if (sheet === "none") return null;
     const isStart = sheet === "start";
@@ -144,27 +144,26 @@ export function EventModal({
       <>
         {/* Backdrop */}
         <div
-          className="fixed inset-0 bg-black/40 z-[60]"
+          className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center px-4"
           onClick={() => setSheet("none")}
-        />
-        {/* Sheet */}
-        <div className="fixed bottom-0 left-0 right-0 z-[70] bg-white dark:bg-slate-800 rounded-t-2xl pb-safe">
-          {/* Handle */}
-          <div className="flex justify-center pt-3 pb-2">
-            <div className="w-10 h-1 rounded-full bg-slate-200 dark:bg-slate-600" />
-          </div>
-          <div className="flex items-center justify-between px-4 pb-3 border-b border-slate-100 dark:border-slate-700">
-            <span className="text-base font-bold">
+        >
+        {/* Dialog */}
+        <div
+          className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-5 pt-5 pb-3">
+            <span className="text-base font-bold text-slate-800 dark:text-slate-100">
               {isStart ? "開始日" : "終了日"}を選択
             </span>
             <button
               onClick={() => setSheet("none")}
-              className="text-brand-500 font-semibold text-sm"
+              className="px-4 h-8 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-full transition-colors"
             >
               完了
             </button>
           </div>
-          <div className="flex justify-center py-2">
+          <div className="flex justify-center px-2 pb-5">
             <DayPicker
               mode="single"
               selected={selected}
@@ -202,6 +201,7 @@ export function EventModal({
               }}
             />
           </div>
+        </div>
         </div>
       </>
     );
