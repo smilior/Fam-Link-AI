@@ -7,12 +7,13 @@ import {
   updateMemberDisplayName,
   updateMemberRole,
   deleteMyAccount,
+  deleteNonUserMember,
 } from "@/lib/actions/family";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { MemberAvatar } from "@/components/member/member-avatar";
-import { Copy, Check, LogOut, Plus, X, Smartphone, Pencil, Mail, AlertTriangle, Bell, BellOff } from "lucide-react";
+import { Copy, Check, LogOut, Plus, X, Smartphone, Pencil, Mail, AlertTriangle, Bell, BellOff, Trash2 } from "lucide-react";
 
 type Member = {
   id: string;
@@ -203,6 +204,62 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
     arr[i] = raw.charCodeAt(i);
   }
   return arr;
+}
+
+// ── Delete Non-User Member Button ─────────────────────────────────────────────
+function DeleteMemberButton({
+  memberId,
+  displayName,
+  onDeleted,
+}: {
+  memberId: string;
+  displayName: string;
+  onDeleted: () => void;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteNonUserMember(memberId);
+      onDeleted();
+    } finally {
+      setDeleting(false);
+      setConfirm(false);
+    }
+  };
+
+  if (confirm) {
+    return (
+      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4" onClick={() => setConfirm(false)}>
+        <div className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-col items-center text-center gap-2">
+            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+              <Trash2 className="w-6 h-6 text-red-500" />
+            </div>
+            <p className="font-bold text-base">{displayName} を削除しますか？</p>
+            <p className="text-sm text-muted-foreground">この操作は取り消せません。</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setConfirm(false)}>キャンセル</Button>
+            <Button variant="destructive" className="flex-1" onClick={handleDelete} disabled={deleting}>
+              {deleting ? "削除中..." : "削除する"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setConfirm(true)}
+      className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors"
+    >
+      <Trash2 className="w-3.5 h-3.5" />
+    </button>
+  );
 }
 
 // ── Push Notification Toggle ───────────────────────────────────────────────────
@@ -517,9 +574,12 @@ export function SettingsClient({
                   </p>
                 </div>
                 {!m.userId && editMemberId !== m.id && (
-                  <div className="flex items-center gap-1 text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full flex-shrink-0">
-                    <Smartphone className="w-3 h-3" />
-                    <span>アカウントなし</span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-1 text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full">
+                      <Smartphone className="w-3 h-3" />
+                      <span>アカウントなし</span>
+                    </div>
+                    <DeleteMemberButton memberId={m.id} displayName={m.displayName} onDeleted={() => router.refresh()} />
                   </div>
                 )}
               </div>
