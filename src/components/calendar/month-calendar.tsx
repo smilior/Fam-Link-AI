@@ -24,324 +24,234 @@ type Props = {
   currentMember: FamilyMember;
 };
 
-// Pill colors (member-100 bg + member-700 text)
-const PILL_COLORS: Record<string, { bg: string; text: string }> = {
-  blue:   { bg: "#DBEAFE", text: "#1D4ED8" }, // papa
-  pink:   { bg: "#FCE7F3", text: "#BE185D" }, // mama
-  yellow: { bg: "#FEF9C3", text: "#A16207" }, // daughter
-  green:  { bg: "#DCFCE7", text: "#15803D" }, // son
-  all:    { bg: "#E0E7FF", text: "#4338CA" }, // brand/all
+// ── Color system ──────────────────────────────────────────────────────────────
+// Normal: soft bg + dark text   Important: solid bg + white text
+const PILL: Record<string, { bg: string; text: string }> = {
+  blue:   { bg: "#DBEAFE", text: "#1E40AF" },
+  pink:   { bg: "#FCE7F3", text: "#9D174D" },
+  yellow: { bg: "#FEF9C3", text: "#854D0E" },
+  green:  { bg: "#DCFCE7", text: "#14532D" },
+  all:    { bg: "#E0E7FF", text: "#3730A3" },
 };
 
-const BG_COLOR_MAP: Record<string, string> = {
-  blue:   "bg-papa-500",
-  pink:   "bg-mama-500",
-  yellow: "bg-daughter-500",
-  green:  "bg-son-500",
+const AVATAR_BG: Record<string, string> = {
+  blue: "#3B82F6", pink: "#EC4899", yellow: "#EAB308", green: "#22C55E",
 };
 
-const RING_COLOR_MAP: Record<string, string> = {
-  blue:   "ring-papa-200",
-  pink:   "ring-mama-200",
-  yellow: "ring-daughter-200",
-  green:  "ring-son-200",
+const RING: Record<string, string> = {
+  blue: "ring-papa-200", pink: "ring-mama-200",
+  yellow: "ring-daughter-200", green: "ring-son-200",
 };
 
-function getPrimaryColor(memberIds: string[], members: FamilyMember[]): string {
-  if (memberIds.length === 0) return "all";
-  const member = members.find((m) => m.id === memberIds[0]);
-  return member?.color || "all";
+function primaryColor(memberIds: string[], members: FamilyMember[]): string {
+  const m = members.find((x) => x.id === memberIds[0]);
+  return m?.color ?? "all";
 }
 
-type WeekDay = {
-  date: number;      // display number
-  dayOfMonth: number; // actual day in current month (0 if not current)
-  isCurrent: boolean;
-  dow: number; // 0=Sun
-};
+// ── Calendar grid builder ─────────────────────────────────────────────────────
+type Cell = { date: number; dom: number; cur: boolean; dow: number };
 
-type PlacedEvent = EventWithMembers & {
-  _startCol: number;
-  _endCol: number;
-  _isMulti: boolean;
-};
-
-function buildWeeks(year: number, month: number): WeekDay[][] {
-  const firstDow = new Date(year, month - 1, 1).getDay();
-  const dim = new Date(year, month, 0).getDate();
-  const dimPrev = new Date(year, month - 1, 0).getDate();
-  const weeks: WeekDay[][] = [];
+function buildWeeks(y: number, m: number): Cell[][] {
+  const first = new Date(y, m - 1, 1).getDay();
+  const dim   = new Date(y, m, 0).getDate();
+  const dprev = new Date(y, m - 1, 0).getDate();
+  const weeks: Cell[][] = [];
 
   for (let w = 0; w < 6; w++) {
-    const week: WeekDay[] = [];
+    const week: Cell[] = [];
     for (let d = 0; d < 7; d++) {
-      const actual = 1 - firstDow + w * 7 + d;
-      let display: number, dayOfMonth: number, isCurrent: boolean;
-      if (actual < 1) {
-        display = dimPrev + actual;
-        dayOfMonth = 0;
-        isCurrent = false;
-      } else if (actual > dim) {
-        display = actual - dim;
-        dayOfMonth = 0;
-        isCurrent = false;
-      } else {
-        display = actual;
-        dayOfMonth = actual;
-        isCurrent = true;
-      }
-      week.push({ date: display, dayOfMonth, isCurrent, dow: d });
+      const n = 1 - first + w * 7 + d;
+      if (n < 1)      week.push({ date: dprev + n, dom: 0, cur: false, dow: d });
+      else if (n > dim) week.push({ date: n - dim, dom: 0, cur: false, dow: d });
+      else              week.push({ date: n, dom: n, cur: true, dow: d });
     }
     weeks.push(week);
-    if (1 - firstDow + (w + 1) * 7 > dim + 7) break;
+    if (1 - first + (w + 1) * 7 > dim + 7) break;
   }
-  // Trim last week if entirely next month
-  while (
-    weeks.length > 5 &&
-    weeks[weeks.length - 1].every((d) => !d.isCurrent)
-  )
-    weeks.pop();
-
+  while (weeks.length > 5 && weeks.at(-1)!.every((c) => !c.cur)) weeks.pop();
   return weeks;
 }
 
-function getEventsForWeek(
-  week: WeekDay[],
-  events: EventWithMembers[],
-  filteredMemberIds: string[]
-): PlacedEvent[] {
-  const currentDays = week.filter((d) => d.isCurrent);
-  if (currentDays.length === 0) return [];
+// ── Event layout ──────────────────────────────────────────────────────────────
+type PEv = EventWithMembers & { sc: number; ec: number; multi: boolean };
 
-  const wFirst = currentDays[0].dayOfMonth;
-  const wLast = currentDays[currentDays.length - 1].dayOfMonth;
+function weekEvents(week: Cell[], evs: EventWithMembers[], filter: string[]): PEv[] {
+  const cur = week.filter((c) => c.cur);
+  if (!cur.length) return [];
+  const wf = cur[0].dom, wl = cur.at(-1)!.dom;
+  const out: PEv[] = [];
 
-  const result: PlacedEvent[] = [];
-  events.forEach((ev) => {
-    if (
-      filteredMemberIds.length > 0 &&
-      !ev.memberIds.some((id) => filteredMemberIds.includes(id))
-    )
-      return;
+  evs.forEach((ev) => {
+    if (filter.length && !ev.memberIds.some((id) => filter.includes(id))) return;
+    const es = new Date(ev.startAt).getDate();
+    const ee = new Date(ev.endAt).getDate();
+    if (ee < wf || es > wl) return;
 
-    const eStart = new Date(ev.startAt).getDate();
-    const eEnd = new Date(ev.endAt).getDate();
-
-    if (eEnd < wFirst || eStart > wLast) return;
-
-    // Find occupied columns in this week
     const cols: number[] = [];
-    week.forEach((d, i) => {
-      if (d.isCurrent && d.dayOfMonth >= eStart && d.dayOfMonth <= eEnd)
-        cols.push(i);
+    week.forEach((c, i) => {
+      if (c.cur && c.dom >= es && c.dom <= ee) cols.push(i);
     });
-    if (cols.length === 0) return;
-
-    result.push({
-      ...ev,
-      _startCol: cols[0],
-      _endCol: cols[cols.length - 1],
-      _isMulti: eStart !== eEnd,
-    });
+    if (!cols.length) return;
+    out.push({ ...ev, sc: cols[0], ec: cols.at(-1)!, multi: es !== ee });
   });
-  return result;
+  return out;
 }
 
-function allocateTracks(events: PlacedEvent[]): (PlacedEvent | null)[][] {
-  // Multi-day first, then by start col
-  const sorted = [...events].sort((a, b) => {
-    if (a._isMulti && !b._isMulti) return -1;
-    if (!a._isMulti && b._isMulti) return 1;
-    return a._startCol - b._startCol;
-  });
-
-  const tracks: (PlacedEvent | null)[][] = [];
+function allocate(evs: PEv[]): (PEv | null)[][] {
+  const sorted = [...evs].sort((a, b) =>
+    a.multi === b.multi ? a.sc - b.sc : a.multi ? -1 : 1
+  );
+  const tracks: (PEv | null)[][] = [];
   sorted.forEach((ev) => {
     let placed = false;
-    for (const track of tracks) {
-      let ok = true;
-      for (let c = ev._startCol; c <= ev._endCol; c++) {
-        if (track[c]) { ok = false; break; }
-      }
-      if (ok) {
-        for (let c = ev._startCol; c <= ev._endCol; c++) track[c] = ev;
-        placed = true;
-        break;
+    for (const t of tracks) {
+      if (Array.from({ length: ev.ec - ev.sc + 1 }, (_, i) => ev.sc + i).every((c) => !t[c])) {
+        for (let c = ev.sc; c <= ev.ec; c++) t[c] = ev;
+        placed = true; break;
       }
     }
     if (!placed) {
-      const newTrack: (PlacedEvent | null)[] = Array(7).fill(null);
-      for (let c = ev._startCol; c <= ev._endCol; c++) newTrack[c] = ev;
-      tracks.push(newTrack);
+      const t: (PEv | null)[] = Array(7).fill(null);
+      for (let c = ev.sc; c <= ev.ec; c++) t[c] = ev;
+      tracks.push(t);
     }
   });
   return tracks;
 }
 
-export function MonthCalendar({
-  year,
-  month,
-  events,
-  members,
-  currentMember,
-}: Props) {
+// ── Component ─────────────────────────────────────────────────────────────────
+export function MonthCalendar({ year, month, events, members, currentMember }: Props) {
   const router = useRouter();
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [filteredMemberIds, setFilteredMemberIds] = useState<string[]>([]);
-  const [showEventModal, setShowEventModal] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<EventWithMembers | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [detailEvent, setDetailEvent] = useState<EventWithMembers | null>(null);
+  const [selDay, setSelDay]           = useState<number | null>(null);
+  const [filter, setFilter]           = useState<string[]>([]);
+  const [showCreate, setShowCreate]   = useState(false);
+  const [editEv, setEditEv]           = useState<EventWithMembers | null>(null);
+  const [detailEv, setDetailEv]       = useState<EventWithMembers | null>(null);
 
   const today = new Date();
-  const isCurrentMonth =
-    today.getFullYear() === year && today.getMonth() === month - 1;
-  const todayDate = today.getDate();
+  const isCurMon = today.getFullYear() === year && today.getMonth() === month - 1;
 
-  const handleMonthChange = (delta: number) => {
-    let newMonth = month + delta;
-    let newYear = year;
-    if (newMonth > 12) { newMonth = 1; newYear++; }
-    if (newMonth < 1) { newMonth = 12; newYear--; }
-    router.push(`/dashboard?year=${newYear}&month=${newMonth}`);
-  };
-
-  const goToday = () => {
-    const now = new Date();
-    router.push(`/dashboard?year=${now.getFullYear()}&month=${now.getMonth() + 1}`);
-  };
-
-  const toggleFilter = (memberId: string) => {
-    setFilteredMemberIds((prev) =>
-      prev.includes(memberId)
-        ? prev.filter((id) => id !== memberId)
-        : [...prev, memberId]
-    );
+  const nav = (d: number) => {
+    let nm = month + d, ny = year;
+    if (nm > 12) { nm = 1; ny++; }
+    if (nm < 1)  { nm = 12; ny--; }
+    router.push(`/dashboard?year=${ny}&month=${nm}`);
   };
 
   const weeks = buildWeeks(year, month);
 
-  const getSelectedDayEvents = () => {
-    if (selectedDay === null) return [];
-    const dayStart = new Date(year, month - 1, selectedDay).getTime();
-    const dayEnd = dayStart + 86400000 - 1;
-    return events.filter((e) => {
-      const inDay = e.startAt <= dayEnd && e.endAt >= dayStart;
-      const inFilter =
-        filteredMemberIds.length === 0 ||
-        e.memberIds.some((id) => filteredMemberIds.includes(id));
-      return inDay && inFilter;
+  const dayEvs = (dom: number) => {
+    const s = new Date(year, month - 1, dom).getTime();
+    const e = s + 86400000 - 1;
+    return events.filter((ev) => {
+      const ok = ev.startAt <= e && ev.endAt >= s;
+      const fok = !filter.length || ev.memberIds.some((id) => filter.includes(id));
+      return ok && fok;
     });
   };
 
-  const defaultDate =
-    selectedDay !== null ? new Date(year, month - 1, selectedDay) : undefined;
-
   return (
-    <div className="flex flex-col h-full">
-      {/* Combined header: member filters left, month nav right */}
-      <div className="flex items-center justify-between px-3 py-2 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
-        {/* Member avatar filters */}
-        <div className="flex items-center gap-1">
+    <div className="flex flex-col h-full select-none">
+
+      {/* ── Sub-header ──────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-3 py-2 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700/60">
+        {/* Member filter avatars */}
+        <div className="flex items-center gap-1.5">
           {members.map((m) => {
-            const isActive =
-              filteredMemberIds.length === 0 ||
-              filteredMemberIds.includes(m.id);
+            const on = !filter.length || filter.includes(m.id);
             return (
               <button
                 key={m.id}
-                onClick={() => toggleFilter(m.id)}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ring-2 transition-all ${BG_COLOR_MAP[m.color] || "bg-slate-400"} ${RING_COLOR_MAP[m.color] || "ring-slate-200"} ${isActive ? "opacity-100" : "opacity-30"}`}
+                onClick={() =>
+                  setFilter((p) =>
+                    p.includes(m.id) ? p.filter((x) => x !== m.id) : [...p, m.id]
+                  )
+                }
+                className={`w-8 h-8 rounded-full ring-2 text-white text-[11px] font-bold transition-all duration-150 flex items-center justify-center ${RING[m.color] ?? "ring-slate-200"} ${on ? "opacity-100 scale-100" : "opacity-30 scale-95"}`}
+                style={{ backgroundColor: AVATAR_BG[m.color] ?? "#94a3b8" }}
               >
                 {m.displayName.charAt(0)}
               </button>
             );
           })}
         </div>
-        {/* Month navigation */}
+
+        {/* Month nav */}
         <div className="flex items-center gap-0.5">
-          <button
-            onClick={() => handleMonthChange(-1)}
-            className="w-11 h-11 flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-700"
-          >
-            <ChevronLeft className="w-4 h-4" />
+          <button onClick={() => nav(-1)} className="w-10 h-10 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-colors">
+            <ChevronLeft className="w-4 h-4 text-slate-500" />
           </button>
-          <h2 className="text-base font-bold min-w-[88px] text-center">
+          <span className="text-[15px] font-bold w-[88px] text-center tabular-nums">
             {year}年{month}月
-          </h2>
-          <button
-            onClick={() => handleMonthChange(1)}
-            className="w-11 h-11 flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-700"
-          >
-            <ChevronRight className="w-4 h-4" />
+          </span>
+          <button onClick={() => nav(1)} className="w-10 h-10 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-colors">
+            <ChevronRight className="w-4 h-4 text-slate-500" />
           </button>
           <button
-            onClick={goToday}
-            className="ml-1 px-2.5 h-11 flex items-center text-sm font-medium text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-500/10 rounded-full"
+            onClick={() => router.push(`/dashboard?year=${today.getFullYear()}&month=${today.getMonth() + 1}`)}
+            className="ml-1 px-3 h-8 rounded-full text-[13px] font-semibold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-100 dark:hover:bg-brand-500/20 transition-colors"
           >
             今日
           </button>
         </div>
       </div>
 
-      {/* Weekday headers */}
-      <div className="grid grid-cols-7 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-        {["日", "月", "火", "水", "木", "金", "土"].map((d, i) => (
+      {/* ── Weekday header ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-7 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700/60">
+        {["日","月","火","水","木","金","土"].map((d, i) => (
           <div
             key={d}
-            className={`text-center text-sm font-medium py-1.5 ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-slate-400 dark:text-slate-500"}`}
+            className={`py-1.5 text-center text-[11px] font-semibold tracking-wide ${
+              i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-slate-400"
+            }`}
           >
             {d}
           </div>
         ))}
       </div>
 
-      {/* Week rows */}
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+      {/* ── Week rows ───────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white dark:bg-slate-900">
         {weeks.map((week, wi) => {
-          const weekEvts = getEventsForWeek(week, events, filteredMemberIds);
-          const tracks = allocateTracks(weekEvts);
-          const isLastWeek = wi === weeks.length - 1;
-
+          const tracks = allocate(weekEvents(week, events, filter));
           return (
             <div
               key={wi}
-              className={`flex-1 flex flex-col min-h-0 overflow-hidden ${!isLastWeek ? "border-b border-slate-200 dark:border-slate-700" : ""}`}
+              className="flex-1 flex flex-col min-h-0 border-b border-slate-100 dark:border-slate-800 last:border-b-0"
               style={{
-                backgroundSize: "calc(100% / 7) 100%",
-                backgroundImage:
-                  "linear-gradient(to right, transparent calc(100% - 1px), #f1f5f9 1px)",
+                backgroundImage: "linear-gradient(to right, transparent calc(100%/7*1 - 1px), #f1f5f9 calc(100%/7*1 - 1px), #f1f5f9 calc(100%/7*1), transparent calc(100%/7*1), transparent calc(100%/7*2 - 1px), #f1f5f9 calc(100%/7*2 - 1px), #f1f5f9 calc(100%/7*2), transparent calc(100%/7*2), transparent calc(100%/7*3 - 1px), #f1f5f9 calc(100%/7*3 - 1px), #f1f5f9 calc(100%/7*3), transparent calc(100%/7*3), transparent calc(100%/7*4 - 1px), #f1f5f9 calc(100%/7*4 - 1px), #f1f5f9 calc(100%/7*4), transparent calc(100%/7*4), transparent calc(100%/7*5 - 1px), #f1f5f9 calc(100%/7*5 - 1px), #f1f5f9 calc(100%/7*5), transparent calc(100%/7*5), transparent calc(100%/7*6 - 1px), #f1f5f9 calc(100%/7*6 - 1px), #f1f5f9 calc(100%/7*6), transparent calc(100%/7*6))",
               }}
             >
-              {/* Day numbers row */}
+              {/* Day numbers */}
               <div className="grid grid-cols-7 flex-shrink-0">
-                {week.map((day, di) => {
-                  const isToday =
-                    isCurrentMonth &&
-                    day.isCurrent &&
-                    day.dayOfMonth === todayDate;
-                  const isSelected =
-                    day.isCurrent && day.dayOfMonth === selectedDay;
+                {week.map((cell, di) => {
+                  const isToday = isCurMon && cell.cur && cell.dom === today.getDate();
+                  const isSel   = cell.cur && cell.dom === selDay;
+                  const isSun   = cell.dow === 0;
+                  const isSat   = cell.dow === 6;
                   return (
                     <div
                       key={di}
-                      className="py-0.5 px-1 cursor-pointer"
                       onClick={() =>
-                        day.isCurrent &&
-                        setSelectedDay((prev) =>
-                          prev === day.dayOfMonth ? null : day.dayOfMonth
-                        )
+                        cell.cur && setSelDay((p) => p === cell.dom ? null : cell.dom)
                       }
+                      className={`pt-[3px] pb-px pl-1 cursor-pointer group`}
                     >
                       {isToday ? (
-                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-500 text-white text-[13px] font-bold">
-                          {day.date}
+                        <span className="inline-flex w-[22px] h-[22px] items-center justify-center rounded-full bg-brand-500 text-white text-[13px] font-bold leading-none">
+                          {cell.date}
                         </span>
                       ) : (
                         <span
-                          className={`text-[13px] font-medium ${!day.isCurrent ? "text-slate-300 dark:text-slate-600" : day.dow === 0 ? "text-red-600 dark:text-red-400" : day.dow === 6 ? "text-blue-600 dark:text-blue-400" : "text-slate-700 dark:text-slate-200"} ${isSelected ? "underline decoration-brand-500" : ""}`}
+                          className={`inline-flex w-[22px] h-[22px] items-center justify-center rounded-full text-[13px] font-medium leading-none transition-colors
+                            ${!cell.cur ? "text-slate-300 dark:text-slate-600" :
+                              isSun ? "text-red-500" :
+                              isSat ? "text-blue-500" :
+                              "text-slate-700 dark:text-slate-200"}
+                            ${isSel ? "bg-brand-100 dark:bg-brand-900/40 ring-1 ring-brand-400" : "group-hover:bg-slate-100 dark:group-hover:bg-slate-800"}
+                          `}
                         >
-                          {day.date}
+                          {cell.date}
                         </span>
                       )}
                     </div>
@@ -349,151 +259,156 @@ export function MonthCalendar({
                 })}
               </div>
 
-              {/* Event tracks (up to 4) */}
+              {/* Event pills */}
               {tracks.slice(0, 4).map((track, ti) => {
-                const pills: {
-                  ev: PlacedEvent;
-                  startCol: number;
-                  span: number;
-                }[] = [];
+                type Pill = { ev: PEv; sc: number; span: number };
+                const pills: Pill[] = [];
                 const seen = new Set<string>();
-                let col = 0;
-                while (col < 7) {
-                  const ev = track[col];
+                let c = 0;
+                while (c < 7) {
+                  const ev = track[c];
                   if (ev && !seen.has(ev.id)) {
                     seen.add(ev.id);
                     let span = 1;
-                    while (col + span < 7 && track[col + span] === ev)
-                      span++;
-                    pills.push({ ev, startCol: col, span });
-                    col += span;
-                  } else {
-                    col++;
-                  }
+                    while (c + span < 7 && track[c + span] === ev) span++;
+                    pills.push({ ev, sc: c, span });
+                    c += span;
+                  } else { c++; }
                 }
 
                 return (
                   <div key={ti} className="grid grid-cols-7 flex-shrink-0">
-                    {pills.map(({ ev, startCol, span }) => {
-                      const color = getPrimaryColor(ev.memberIds, members);
-                      const pillColor =
-                        PILL_COLORS[color] || PILL_COLORS.all;
+                    {pills.map(({ ev, sc, span }) => {
+                      const col  = primaryColor(ev.memberIds, members);
+                      const pill = PILL[col] ?? PILL.all;
                       return (
-                        <div
+                        <button
                           key={ev.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDetailEvent(ev);
-                            setShowDetailModal(true);
-                          }}
+                          onClick={(e) => { e.stopPropagation(); setDetailEv(ev); }}
                           style={{
-                            gridColumn: `${startCol + 1} / span ${span}`,
-                            backgroundColor: pillColor.bg,
-                            color: pillColor.text,
+                            gridColumn: `${sc + 1} / span ${span}`,
+                            backgroundColor: pill.bg,
+                            color: pill.text,
                           }}
-                          className="text-[10.5px] leading-[1.45] font-medium px-[3px] py-px rounded-[3px] mx-px mb-px overflow-hidden whitespace-nowrap text-ellipsis cursor-pointer"
+                          className="text-[10.5px] font-semibold leading-[1.5] px-[5px] py-[1px] rounded-[3px] mx-[2px] mb-[2px] overflow-hidden whitespace-nowrap text-ellipsis text-left hover:brightness-95 active:brightness-90 transition-all cursor-pointer"
                           title={ev.title}
                         >
                           {ev.title}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
                 );
               })}
+
+              {/* +N overflow */}
+              {tracks.length > 4 && (() => {
+                const over: Record<number, number> = {};
+                tracks.slice(4).forEach((t) =>
+                  t.forEach((ev, c) => { if (ev) over[c] = (over[c] ?? 0) + 1; })
+                );
+                return (
+                  <div className="grid grid-cols-7 flex-shrink-0">
+                    {Object.entries(over).map(([col, n]) => (
+                      <div
+                        key={col}
+                        style={{ gridColumn: Number(col) + 1 }}
+                        className="text-[9px] text-slate-400 font-medium pl-1 pb-px"
+                      >
+                        +{n}件
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
       </div>
 
-      {/* Selected day event list */}
-      {selectedDay !== null && (
-        <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 max-h-44 overflow-y-auto flex-shrink-0">
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">
-            {month}月{selectedDay}日
-          </p>
-          {getSelectedDayEvents().length === 0 ? (
-            <p className="text-sm text-slate-400">予定なし</p>
-          ) : (
-            getSelectedDayEvents().map((e) => {
-              const startTime = new Date(e.startAt);
-              const color = getPrimaryColor(e.memberIds, members);
-              const pillColor = PILL_COLORS[color] || PILL_COLORS.all;
-              return (
-                <button
-                  key={e.id}
-                  onClick={() => {
-                    setDetailEvent(e);
-                    setShowDetailModal(true);
-                  }}
-                  className="w-full text-left flex items-center gap-3 py-1.5 px-2 rounded-lg mb-1 hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                >
-                  <span className="text-xs text-slate-500 w-9 flex-shrink-0 font-mono">
-                    {e.isAllDay
-                      ? "終日"
-                      : `${String(startTime.getHours()).padStart(2, "0")}:${String(startTime.getMinutes()).padStart(2, "0")}`}
-                  </span>
-                  <span
-                    className="text-sm font-medium px-1.5 py-0.5 rounded-sm overflow-hidden whitespace-nowrap text-ellipsis flex-1"
-                    style={{
-                      backgroundColor: pillColor.bg,
-                      color: pillColor.text,
-                    }}
-                  >
-                    {e.title}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
+      {/* ── Selected day drawer ─────────────────────────────────────────── */}
+      {selDay !== null && (() => {
+        const evs = dayEvs(selDay);
+        return (
+          <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+            <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-slate-600 dark:text-slate-300">
+                {month}月{selDay}日
+              </span>
+              <button
+                onClick={() => { setEditEv(null); setShowCreate(true); }}
+                className="text-[12px] text-brand-500 font-semibold"
+              >
+                ＋ 追加
+              </button>
+            </div>
+            <div className="px-3 pb-3 max-h-36 overflow-y-auto space-y-1">
+              {evs.length === 0 ? (
+                <p className="text-[13px] text-slate-300 dark:text-slate-600 px-1 py-2">
+                  予定なし
+                </p>
+              ) : (
+                evs.map((ev) => {
+                  const col  = primaryColor(ev.memberIds, members);
+                  const pill = PILL[col] ?? PILL.all;
+                  const t    = new Date(ev.startAt);
+                  return (
+                    <button
+                      key={ev.id}
+                      onClick={() => setDetailEv(ev)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left transition-colors"
+                    >
+                      <span
+                        className="w-1 h-full min-h-[28px] rounded-full flex-shrink-0"
+                        style={{ backgroundColor: AVATAR_BG[col] ?? "#94a3b8" }}
+                      />
+                      <span className="text-[11px] text-slate-400 w-9 flex-shrink-0 font-mono">
+                        {ev.isAllDay ? "終日" : `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`}
+                      </span>
+                      <span
+                        className="text-[13px] font-medium flex-1 truncate px-1.5 py-0.5 rounded"
+                        style={{ backgroundColor: pill.bg, color: pill.text }}
+                      >
+                        {ev.title}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
-      {/* FAB */}
+      {/* ── FAB ─────────────────────────────────────────────────────────── */}
       <button
-        onClick={() => {
-          setEditingEvent(null);
-          setShowEventModal(true);
-        }}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white rounded-full shadow-lg flex items-center justify-center z-40 transition-transform"
+        onClick={() => { setEditEv(null); setShowCreate(true); }}
+        className="fixed bottom-[76px] right-4 w-14 h-14 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white rounded-full shadow-xl shadow-brand-500/30 flex items-center justify-center z-40 transition-all duration-150"
       >
-        <Plus className="w-6 h-6" />
+        <Plus className="w-6 h-6" strokeWidth={2.5} />
       </button>
 
-      {/* Event detail modal */}
-      {showDetailModal && detailEvent && (
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
+      {detailEv && (
         <EventDetailModal
-          event={detailEvent}
+          event={detailEv}
           members={members}
-          onClose={() => {
-            setShowDetailModal(false);
-            setDetailEvent(null);
-          }}
+          onClose={() => setDetailEv(null)}
           onEdit={() => {
-            setShowDetailModal(false);
-            setEditingEvent(detailEvent);
-            setDetailEvent(null);
-            setShowEventModal(true);
+            setEditEv(detailEv);
+            setDetailEv(null);
+            setShowCreate(true);
           }}
         />
       )}
-
-      {/* Event modal */}
-      {showEventModal && (
+      {showCreate && (
         <EventModal
-          event={editingEvent}
+          event={editEv}
           members={members}
           currentMember={currentMember}
-          defaultDate={defaultDate}
-          onClose={() => {
-            setShowEventModal(false);
-            setEditingEvent(null);
-          }}
-          onSaved={() => {
-            setShowEventModal(false);
-            setEditingEvent(null);
-            router.refresh();
-          }}
+          defaultDate={selDay !== null ? new Date(year, month - 1, selDay) : undefined}
+          onClose={() => { setShowCreate(false); setEditEv(null); }}
+          onSaved={() => { setShowCreate(false); setEditEv(null); router.refresh(); }}
         />
       )}
     </div>
