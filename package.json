@@ -13,6 +13,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@holiday-jp/holiday_jp": "^2.5.1",
     "@libsql/client": "^0.17.0",
     "better-auth": "^1.4.18",
     "class-variance-authority": "^0.7.1",

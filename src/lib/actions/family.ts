@@ -5,6 +5,7 @@ import * as schema from "@/lib/db/schema";
 import { getServerSession } from "@/lib/auth-session";
 import { eq, and, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 function generateInviteCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -87,7 +88,7 @@ export async function joinFamilyGroup(
   return { groupId: group.id, memberId };
 }
 
-export async function getCurrentMember() {
+export const getCurrentMember = cache(async function getCurrentMember() {
   const session = await getServerSession();
   if (!session?.user) return null;
 
@@ -99,7 +100,7 @@ export async function getCurrentMember() {
     .limit(1);
 
   return members[0] ?? null;
-}
+});
 
 export async function getFamilyGroupWithMembers(familyGroupId: string) {
   const db = getDb();

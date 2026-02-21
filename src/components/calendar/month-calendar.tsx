@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { EventModal } from "./event-modal";
 import { EventDetailModal } from "./event-detail-modal";
 import type { FamilyMember } from "@/lib/db/types";
 import type { CalendarEvent } from "@/lib/actions/calendar";
+import { getHolidayMap } from "@/lib/holidays";
 
 export type EventWithMembers = CalendarEvent;
 
@@ -36,8 +37,8 @@ const RING: Record<string, string> = {
   yellow: "ring-daughter-200", green: "ring-son-200",
 };
 
-function primaryColor(memberIds: string[], members: FamilyMember[]): string {
-  const m = members.find((x) => x.id === memberIds[0]);
+function primaryColor(memberIds: string[], memberMap: Map<string, FamilyMember>): string {
+  const m = memberMap.get(memberIds[0]);
   return m?.color ?? "all";
 }
 
@@ -121,6 +122,11 @@ type ScopeTarget = {
 // ── Component ─────────────────────────────────────────────────────────────────
 export function MonthCalendar({ year, month, events, members, currentMember }: Props) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const memberMap = useMemo(
+    () => new Map(members.map((m) => [m.id, m])),
+    [members]
+  );
   const [selDay, setSelDay]           = useState<number | null>(null);
   const [filter, setFilter]           = useState<string[]>([]);
   const [showCreate, setShowCreate]   = useState(false);
@@ -131,6 +137,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
 
   const today = new Date();
   const isCurMon = today.getFullYear() === year && today.getMonth() === month - 1;
+  const holidayMap = getHolidayMap(year, month);
 
   // ── Swipe gesture ──────────────────────────────────────────────────────────
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -309,10 +316,12 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
               {/* Day numbers */}
               <div className="grid grid-cols-7 flex-shrink-0">
                 {week.map((cell, di) => {
-                  const isToday = isCurMon && cell.cur && cell.dom === today.getDate();
-                  const isSel   = cell.cur && cell.dom === selDay;
-                  const isSun   = cell.dow === 0;
-                  const isSat   = cell.dow === 6;
+                  const isToday   = isCurMon && cell.cur && cell.dom === today.getDate();
+                  const isSel     = cell.cur && cell.dom === selDay;
+                  const isSun     = cell.dow === 0;
+                  const isSat     = cell.dow === 6;
+                  const holiday   = cell.cur ? holidayMap.get(cell.dom) : undefined;
+                  const isHoliday = !!holiday;
                   return (
                     <div
                       key={di}
@@ -328,7 +337,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
                         <span
                           className={`inline-flex w-[22px] h-[22px] items-center justify-center rounded-full text-[13px] font-medium leading-none transition-colors
                             ${!cell.cur ? "text-slate-300 dark:text-slate-600" :
-                              isSun ? "text-red-500" :
+                              isSun || isHoliday ? "text-red-500" :
                               isSat ? "text-blue-500" :
                               "text-slate-700 dark:text-slate-200"}
                             ${isSel ? "font-bold" : "group-hover:bg-slate-100 dark:group-hover:bg-slate-800"}
@@ -336,6 +345,11 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
                         >
                           {cell.date}
                         </span>
+                      )}
+                      {isHoliday && (
+                        <p className="text-[7px] leading-tight text-red-400 truncate w-full pr-0.5 pb-[1px]">
+                          {holiday}
+                        </p>
                       )}
                     </div>
                   );
@@ -362,7 +376,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
                 return (
                   <div key={ti} className="grid grid-cols-7 flex-shrink-0">
                     {pills.map(({ ev, sc, span }) => {
-                      const col  = primaryColor(ev.memberIds, members);
+                      const col  = primaryColor(ev.memberIds, memberMap);
                       const pill = PILL[col] ?? PILL.all;
                       const isRecurring = !!ev.recurrenceRule || !!ev.isVirtual || !!ev.parentEventId;
                       return (
@@ -420,6 +434,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
         const dow = ["日","月","火","水","木","金","土"][dowIdx];
         const isSun = dowIdx === 0;
         const isSat = dowIdx === 6;
+        const holidayName = holidayMap.get(selDay);
         return (
           /* Overlay — click outside to close */
           <div
@@ -444,9 +459,14 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
                 >
                   <X className="w-5 h-5 text-slate-500" />
                 </button>
-                <span className={`text-base font-bold ${isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-slate-800 dark:text-slate-100"}`}>
-                  {month}月{selDay}日 {dow}曜日
-                </span>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className={`text-base font-bold ${isSun || holidayName ? "text-red-500" : isSat ? "text-blue-500" : "text-slate-800 dark:text-slate-100"}`}>
+                    {month}月{selDay}日 {dow}曜日
+                  </span>
+                  {holidayName && (
+                    <span className="text-xs text-red-400 font-medium">{holidayName}</span>
+                  )}
+                </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); setEditEv(null); setExceptionMode(null); setShowCreate(true); }}
                   className="p-2 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -476,7 +496,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
                         return a.startAt - b.startAt;
                       })
                       .map((ev) => {
-                        const col = primaryColor(ev.memberIds, members);
+                        const col = primaryColor(ev.memberIds, memberMap);
                         const t   = new Date(ev.startAt);
                         const te  = new Date(ev.endAt);
                         const isRecurring = !!ev.recurrenceRule || !!ev.isVirtual || !!ev.parentEventId;
@@ -513,7 +533,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
                                 </span>
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   {ev.memberIds.map((mid) => {
-                                    const m = members.find((x) => x.id === mid);
+                                    const m = memberMap.get(mid);
                                     if (!m) return null;
                                     return (
                                       <span
@@ -639,7 +659,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
           currentMember={currentMember}
           defaultDate={selDay !== null ? new Date(year, month - 1, selDay) : undefined}
           onClose={() => { setShowCreate(false); setEditEv(null); setExceptionMode(null); }}
-          onSaved={() => { setShowCreate(false); setEditEv(null); setExceptionMode(null); router.refresh(); }}
+          onSaved={() => { setShowCreate(false); setEditEv(null); setExceptionMode(null); startTransition(() => router.refresh()); }}
         />
       )}
     </div>

@@ -3,7 +3,7 @@
 import { getDb } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { getServerSession } from "@/lib/auth-session";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, count } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
 async function getCurrentMemberId(): Promise<string> {
@@ -51,27 +51,36 @@ export async function markAllRead() {
 
 export async function getUnreadCount(memberId: string): Promise<number> {
   const db = getDb();
-  const rows = await db
-    .select({ id: schema.notificationLog.id })
+  const result = await db
+    .select({ value: count() })
     .from(schema.notificationLog)
     .where(
       and(
         eq(schema.notificationLog.memberId, memberId),
         eq(schema.notificationLog.isRead, 0)
       )
-    );
-  return rows.length;
+    )
+    .get();
+  return result?.value ?? 0;
 }
 
 export async function getUnreadCountForCurrentMember(): Promise<number> {
   const session = await getServerSession();
   if (!session?.user) return 0;
   const db = getDb();
-  const member = await db
-    .select({ id: schema.familyMember.id })
-    .from(schema.familyMember)
-    .where(eq(schema.familyMember.userId, session.user.id))
+  const result = await db
+    .select({ value: count() })
+    .from(schema.notificationLog)
+    .innerJoin(
+      schema.familyMember,
+      eq(schema.notificationLog.memberId, schema.familyMember.id)
+    )
+    .where(
+      and(
+        eq(schema.familyMember.userId, session.user.id),
+        eq(schema.notificationLog.isRead, 0)
+      )
+    )
     .get();
-  if (!member) return 0;
-  return getUnreadCount(member.id);
+  return result?.value ?? 0;
 }
