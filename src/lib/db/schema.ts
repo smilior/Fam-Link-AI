@@ -70,9 +70,7 @@ export const familyMember = sqliteTable("family_member", {
   familyGroupId: text("family_group_id")
     .notNull()
     .references(() => familyGroup.id),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id),
+  userId: text("user_id").references(() => user.id), // nullable for child members without accounts
   role: text("role").notNull(), // papa | mama | daughter | son
   displayName: text("display_name").notNull(),
   color: text("color").notNull(), // blue | pink | yellow | green
@@ -95,6 +93,15 @@ export const event = sqliteTable("event", {
   isAllDay: integer("is_all_day").default(0),
   location: text("location"),
   source: text("source").default("manual"), // manual | ai_scan
+  // Recurrence fields (master events)
+  recurrenceRule: text("recurrence_rule"), // null | "daily" | "weekly" | "monthly" | "yearly"
+  recurrenceInterval: integer("recurrence_interval").default(1),
+  recurrenceEndAt: integer("recurrence_end_at"), // optional recurrence end timestamp
+  recurrenceDaysOfWeek: text("recurrence_days_of_week"), // weekly only: comma-separated 0-6 (0=Sun)
+  // Exception fields (specific occurrence overrides)
+  parentEventId: text("parent_event_id"), // references master event id
+  exceptionDate: integer("exception_date"), // original occurrence startAt being replaced
+  isDeleted: integer("is_deleted").default(0), // tombstone for deleted occurrences
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });

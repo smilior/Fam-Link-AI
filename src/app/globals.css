@@ -92,6 +92,14 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.sheet-slide-up {
+  animation: slideUpSheet 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);

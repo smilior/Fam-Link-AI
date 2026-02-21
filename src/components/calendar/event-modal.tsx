@@ -1,30 +1,74 @@
 "use client";
 
 import { useState } from "react";
-import { X, CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, CalendarIcon, RefreshCw } from "lucide-react";
 import { ja } from "date-fns/locale";
-import { format, parseISO, isAfter, isBefore, startOfDay } from "date-fns";
+import { parseISO } from "date-fns";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
-import { createEvent, updateEvent, deleteEvent } from "@/lib/actions/calendar";
+import {
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  createEventException,
+  deleteEventInstance,
+  type RecurrenceRule,
+} from "@/lib/actions/calendar";
 import type { FamilyMember } from "@/lib/db/types";
 
 type EventData = {
   id: string;
   title: string;
+  description?: string | null;
+  location?: string | null;
   startAt: number;
   endAt: number;
   isAllDay: number | null;
   memberIds: string[];
+  recurrenceRule?: string | null;
+  recurrenceInterval?: number | null;
+  recurrenceEndAt?: number | null;
+  recurrenceDaysOfWeek?: string | null;
+  // Set for virtual occurrences (exception create mode)
+  masterEventId?: string;
+  masterStartAt?: number;
+  masterEndAt?: number;
+  instanceDate?: number;
+  isVirtual?: boolean;
 };
 
 type Props = {
   event?: EventData | null;
+  /** When set: editing "this occurrence only" — creates an exception */
+  exceptionMode?: {
+    masterEventId: string;
+    instanceDate: number;
+  };
   members: FamilyMember[];
   currentMember: FamilyMember;
   defaultDate?: Date;
   onClose: () => void;
   onSaved: () => void;
+};
+
+const RECURRENCE_OPTIONS: { value: RecurrenceRule | "none"; label: string }[] = [
+  { value: "none",    label: "なし" },
+  { value: "daily",  label: "毎日" },
+  { value: "weekly", label: "毎週" },
+  { value: "monthly",label: "毎月" },
+  { value: "yearly", label: "毎年" },
+];
+
+const COLOR_MAP: Record<string, string> = {
+  blue: "bg-papa-500",
+  pink: "bg-mama-500",
+  yellow: "bg-daughter-500",
+  green: "bg-son-500",
+};
+void COLOR_MAP;
+
+const AVATAR_BG: Record<string, string> = {
+  blue: "#3B82F6", pink: "#EC4899", yellow: "#EAB308", green: "#22C55E",
 };
 
 function toDateStr(ts: number) {
@@ -43,21 +87,11 @@ function formatDateJa(dateStr: string) {
   return `${d.getMonth() + 1}月${d.getDate()}日（${weekdays[d.getDay()]}）`;
 }
 
-const COLOR_MAP: Record<string, string> = {
-  blue: "bg-papa-500",
-  pink: "bg-mama-500",
-  yellow: "bg-daughter-500",
-  green: "bg-son-500",
-};
-
-const AVATAR_BG: Record<string, string> = {
-  blue: "#3B82F6", pink: "#EC4899", yellow: "#EAB308", green: "#22C55E",
-};
-
-type DatePickerSheet = "none" | "start" | "end";
+type DatePickerSheet = "none" | "start" | "end" | "recurrenceEnd";
 
 export function EventModal({
   event,
+  exceptionMode,
   members,
   currentMember,
   defaultDate,
@@ -65,6 +99,8 @@ export function EventModal({
   onSaved,
 }: Props) {
   const isEditing = !!event;
+  const isException = !!exceptionMode;
+
   const defaultDateStr = defaultDate
     ? toDateStr(defaultDate.getTime())
     : toDateStr(Date.now());
@@ -78,7 +114,32 @@ export function EventModal({
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(
     event?.memberIds ?? [currentMember.id]
   );
-  const [location, setLocation] = useState("");
+  const [location, setLocation] = useState(event?.location ?? "");
+
+  // Recurrence state — disabled in exception mode
+  const [recurrence, setRecurrence] = useState<RecurrenceRule | "none">(
+    (event?.recurrenceRule as RecurrenceRule) ?? "none"
+  );
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState(
+    event?.recurrenceEndAt ? toDateStr(event.recurrenceEndAt) : ""
+  );
+  // Weekly days-of-week (0=Sun..6=Sat). Pre-populate from event or default to start day.
+  const defaultWeekDays = (): number[] => {
+    if (event?.recurrenceDaysOfWeek) {
+      return event.recurrenceDaysOfWeek.split(",").map(Number);
+    }
+    return [new Date(event?.startAt ?? Date.now()).getDay()];
+  };
+  const [weekDays, setWeekDays] = useState<number[]>(defaultWeekDays);
+
+  const toggleWeekDay = (d: number) => {
+    setWeekDays((prev) =>
+      prev.includes(d)
+        ? prev.length > 1 ? prev.filter((x) => x !== d) : prev // 最低1つ必須
+        : [...prev, d].sort((a, b) => a - b)
+    );
+  };
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError]         = useState("");
   const [sheet, setSheet]         = useState<DatePickerSheet>("none");
@@ -110,10 +171,37 @@ export function EventModal({
         }
       }
 
-      if (isEditing && event) {
-        await updateEvent(event.id, { title: title.trim(), startAt, endAt, isAllDay, location: location || undefined, memberIds: selectedMemberIds });
+      const recurrenceEndAt = recurrenceEndDate
+        ? new Date(`${recurrenceEndDate}T23:59:59`).getTime()
+        : null;
+
+      const payload = {
+        title: title.trim(),
+        description: event?.description ?? undefined,
+        startAt,
+        endAt,
+        isAllDay,
+        location: location || undefined,
+        memberIds: selectedMemberIds,
+        recurrenceRule: isException ? null : (recurrence === "none" ? null : recurrence),
+        recurrenceEndAt: isException ? null : recurrenceEndAt,
+        recurrenceDaysOfWeek: (!isException && recurrence === "weekly" && weekDays.length > 0)
+          ? weekDays.join(",")
+          : null,
+      };
+
+      if (isException && exceptionMode) {
+        // Create exception for this occurrence only
+        const { recurrenceRule: _r, recurrenceEndAt: _re, ...exceptionPayload } = payload;
+        await createEventException(
+          exceptionMode.masterEventId,
+          exceptionMode.instanceDate,
+          exceptionPayload
+        );
+      } else if (isEditing && event) {
+        await updateEvent(event.id, payload);
       } else {
-        await createEvent({ title: title.trim(), startAt, endAt, isAllDay, location: location || undefined, memberIds: selectedMemberIds });
+        await createEvent(payload);
       }
       onSaved();
     } catch (e) {
@@ -124,11 +212,35 @@ export function EventModal({
   };
 
   const handleDelete = async () => {
-    if (!event || !confirm("この予定を削除しますか？")) return;
-    setIsLoading(true);
-    try { await deleteEvent(event.id); onSaved(); }
-    catch (e) { setError(e instanceof Error ? e.message : "削除に失敗しました"); }
-    finally { setIsLoading(false); }
+    if (!event) return;
+
+    if (isException && exceptionMode) {
+      if (!confirm("この日の予定のみを削除しますか？")) return;
+      setIsLoading(true);
+      try {
+        await deleteEventInstance(exceptionMode.masterEventId, exceptionMode.instanceDate);
+        onSaved();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "削除に失敗しました");
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      const isRecurring = !!event.recurrenceRule;
+      const msg = isRecurring
+        ? "この繰り返し予定をすべて削除しますか？"
+        : "この予定を削除しますか？";
+      if (!confirm(msg)) return;
+      setIsLoading(true);
+      try {
+        await deleteEvent(event.id);
+        onSaved();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "削除に失敗しました");
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   const isMultiDay = startDate !== endDate;
@@ -136,25 +248,26 @@ export function EventModal({
   // ── Date picker dialog (centered) ────────────────────────────────────────
   const DateSheet = () => {
     if (sheet === "none") return null;
-    const isStart = sheet === "start";
-    const currentVal = isStart ? startDate : endDate;
-    const selected   = parseISO(currentVal);
+
+    const isStart       = sheet === "start";
+    const isEnd         = sheet === "end";
+    const isRecEnd      = sheet === "recurrenceEnd";
+    const currentVal    = isStart ? startDate : isEnd ? endDate : recurrenceEndDate || startDate;
+    const selected      = parseISO(currentVal);
+    const label         = isStart ? "開始日" : isEnd ? "終了日" : "繰り返し終了日";
 
     return (
-      <>
-        {/* Backdrop */}
-        <div
-          className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center px-4"
-          onClick={() => setSheet("none")}
-        >
-        {/* Dialog */}
+      <div
+        className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center px-4"
+        onClick={() => setSheet("none")}
+      >
         <div
           className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <span className="text-base font-bold text-slate-800 dark:text-slate-100">
-              {isStart ? "開始日" : "終了日"}を選択
+              {label}を選択
             </span>
             <button
               onClick={() => setSheet("none")}
@@ -173,12 +286,20 @@ export function EventModal({
                 if (!day) return;
                 const str = toDateStr(day.getTime());
                 if (isStart) handleStartDateChange(str);
-                else {
+                else if (isEnd) {
                   if (str >= startDate) setEndDate(str);
                   else { setStartDate(str); setEndDate(str); }
+                } else {
+                  setRecurrenceEndDate(str);
                 }
               }}
-              disabled={isStart ? undefined : { before: parseISO(startDate) }}
+              disabled={
+                isEnd
+                  ? { before: parseISO(startDate) }
+                  : isRecEnd
+                  ? { before: parseISO(startDate) }
+                  : undefined
+              }
               classNames={{
                 root: "rdp-custom",
                 months: "flex flex-col",
@@ -202,8 +323,7 @@ export function EventModal({
             />
           </div>
         </div>
-        </div>
-      </>
+      </div>
     );
   };
 
@@ -215,7 +335,14 @@ export function EventModal({
           <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
             <X className="w-5 h-5 text-slate-500" />
           </button>
-          <h2 className="text-base font-bold">{isEditing ? "予定を編集" : "予定を追加"}</h2>
+          <div className="text-center">
+            <h2 className="text-base font-bold">
+              {isException ? "この日の予定を編集" : isEditing ? "予定を編集" : "予定を追加"}
+            </h2>
+            {isException && (
+              <p className="text-[11px] text-slate-400">この日のみ変更します</p>
+            )}
+          </div>
           <button
             onClick={handleSave}
             disabled={isLoading}
@@ -317,6 +444,100 @@ export function EventModal({
               </button>
             </div>
 
+            {/* Recurrence (hidden in exception mode) */}
+            {!isException && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-slate-400" />
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">繰り返し</p>
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {RECURRENCE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setRecurrence(opt.value);
+                        // 毎週に切り替えた際、曜日未設定なら開始日の曜日をデフォルト設定
+                        if (opt.value === "weekly" && weekDays.length === 0) {
+                          setWeekDays([new Date(startDate).getDay()]);
+                        }
+                      }}
+                      className={`px-3.5 py-1.5 rounded-full text-sm font-medium border-2 transition-all duration-150 ${
+                        recurrence === opt.value
+                          ? "border-brand-500 bg-brand-500 text-white"
+                          : "border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-brand-300"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 曜日選択（毎週のみ） */}
+                {recurrence === "weekly" && (
+                  <div className="flex gap-1.5">
+                    {["日","月","火","水","木","金","土"].map((label, i) => {
+                      const on = weekDays.includes(i);
+                      const isSun = i === 0;
+                      const isSat = i === 6;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => toggleWeekDay(i)}
+                          className={`flex-1 h-9 rounded-lg text-sm font-bold border-2 transition-all duration-150 ${
+                            on
+                              ? isSun
+                                ? "bg-red-500 border-red-500 text-white"
+                                : isSat
+                                ? "bg-blue-500 border-blue-500 text-white"
+                                : "bg-brand-500 border-brand-500 text-white"
+                              : "border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 hover:border-slate-300"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Recurrence end date */}
+                {recurrence !== "none" && (
+                  <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl overflow-hidden">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSheet("recurrenceEnd")}
+                      onKeyDown={(e) => e.key === "Enter" && setSheet("recurrenceEnd")}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+                    >
+                      <p className="text-sm text-slate-600 dark:text-slate-300">繰り返し終了日</p>
+                      <div className="flex items-center gap-2">
+                        {recurrenceEndDate ? (
+                          <>
+                            <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
+                              {formatDateJa(recurrenceEndDate)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setRecurrenceEndDate(""); }}
+                              className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-slate-500 hover:bg-slate-300"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-sm text-slate-400">なし（無制限）</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Who is this for */}
             <div className="space-y-3">
               <div>
@@ -379,21 +600,21 @@ export function EventModal({
             </div>
 
             {/* Delete */}
-            {isEditing && (
+            {(isEditing || isException) && (
               <button
                 type="button"
                 onClick={handleDelete}
                 disabled={isLoading}
                 className="w-full py-3.5 text-red-500 border-2 border-red-100 dark:border-red-900/40 rounded-2xl hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40 text-sm font-semibold transition-colors"
               >
-                この予定を削除
+                {isException ? "この日の予定を削除" : "この予定を削除"}
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Date picker sheet */}
+      {/* Date picker dialog */}
       <DateSheet />
     </>
   );

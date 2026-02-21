@@ -30,17 +30,27 @@ const STAMPS = [
   { type: "like", emoji: "\u{2764}\u{FE0F}", label: "いいね" },
 ] as const;
 
-function formatDateTime(ts: number, isAllDay: boolean) {
+function formatDate(ts: number) {
   const d = new Date(ts);
-  const dateStr = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-  if (isAllDay) return `${dateStr}（終日）`;
-  const timeStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  return `${dateStr} ${timeStr}`;
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+function formatTime(ts: number) {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function isSameDay(a: number, b: number) {
+  const da = new Date(a), db = new Date(b);
+  return da.getFullYear() === db.getFullYear()
+    && da.getMonth() === db.getMonth()
+    && da.getDate() === db.getDate();
 }
 
 export function EventDetailModal({ event, members, onClose, onEdit }: Props) {
   const eventMembers = members.filter((m) => event.memberIds.includes(m.id));
   const isAllDay = !!event.isAllDay;
+  const multiDay = !isSameDay(event.startAt, event.endAt);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-slate-900">
@@ -69,12 +79,25 @@ export function EventDetailModal({ event, members, onClose, onEdit }: Props) {
         {/* Date/Time */}
         <div className="flex items-start gap-3">
           <Clock className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
-          <div className="text-sm">
-            <p>{formatDateTime(event.startAt, isAllDay)}</p>
-            {!isAllDay && (
-              <p className="text-slate-500">
-                ~ {formatDateTime(event.endAt, false).split(" ")[1]}
-              </p>
+          <div className="text-sm space-y-0.5">
+            {isAllDay ? (
+              multiDay ? (
+                <p>{formatDate(event.startAt)}（終日）〜 {formatDate(event.endAt)}（終日）</p>
+              ) : (
+                <p>{formatDate(event.startAt)}（終日）</p>
+              )
+            ) : (
+              multiDay ? (
+                <>
+                  <p>{formatDate(event.startAt)} {formatTime(event.startAt)}</p>
+                  <p className="text-slate-500">〜 {formatDate(event.endAt)} {formatTime(event.endAt)}</p>
+                </>
+              ) : (
+                <>
+                  <p>{formatDate(event.startAt)} {formatTime(event.startAt)}</p>
+                  <p className="text-slate-500">〜 {formatTime(event.endAt)}</p>
+                </>
+              )
             )}
           </div>
         </div>
