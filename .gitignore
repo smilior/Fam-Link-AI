@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# lolipop cron scripts (contain secrets)
+/lolipop/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
