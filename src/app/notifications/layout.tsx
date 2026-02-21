@@ -3,7 +3,7 @@ import { getServerSession } from "@/lib/auth-session";
 import { getCurrentMember } from "@/lib/actions/family";
 import { AppLayout } from "@/components/layout/app-layout";
 
-export default async function DashboardLayout({
+export default async function NotificationsLayout({
   children,
 }: {
   children: React.ReactNode;

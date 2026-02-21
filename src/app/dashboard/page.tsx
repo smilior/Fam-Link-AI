@@ -1,34 +1,33 @@
-import { getServerSession } from "@/lib/auth-session";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { getCurrentMember, getFamilyGroupWithMembers } from "@/lib/actions/family";
+import { getMonthEvents } from "@/lib/actions/calendar";
+import { MonthCalendar } from "@/components/calendar/month-calendar";
+import { redirect } from "next/navigation";
 
-export default async function DashboardPage() {
-  const session = await getServerSession();
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string; month?: string }>;
+}) {
+  const member = await getCurrentMember();
+  if (!member) redirect("/setup");
+
+  const params = await searchParams;
+  const now = new Date();
+  const year = Number(params.year) || now.getFullYear();
+  const month = Number(params.month) || now.getMonth() + 1;
+
+  const [events, familyData] = await Promise.all([
+    getMonthEvents(year, month, member.familyGroupId),
+    getFamilyGroupWithMembers(member.familyGroupId),
+  ]);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">ダッシュボード</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>プロフィール</CardTitle>
-          <CardDescription>アカウント情報</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p>
-            <span className="text-muted-foreground">名前:</span>{" "}
-            {session?.user.name}
-          </p>
-          <p>
-            <span className="text-muted-foreground">メール:</span>{" "}
-            {session?.user.email}
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+    <MonthCalendar
+      year={year}
+      month={month}
+      events={events}
+      members={familyData?.members ?? []}
+      currentMember={member}
+    />
   );
 }
