@@ -33,7 +33,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = getDb();
+  let db: ReturnType<typeof getDb>;
+  try {
+    db = getDb();
+  } catch (e) {
+    return NextResponse.json({ error: "DB init failed", detail: String(e) }, { status: 500 });
+  }
+
+  try {
   const now = Date.now();
   const { end: todayEnd } = getTodayRangeJST();
 
@@ -108,4 +115,8 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ sent: sentCount });
+  } catch (e) {
+    console.error("[push/send] error:", e);
+    return NextResponse.json({ error: "Internal error", detail: String(e) }, { status: 500 });
+  }
 }
