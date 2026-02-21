@@ -14,5 +14,5 @@ export default async function HubLayout({
   const member = await getCurrentMember();
   if (!member) redirect("/setup");
 
-  return <AppLayout>{children}</AppLayout>;
+  return <AppLayout title="ハブ">{children}</AppLayout>;
 }

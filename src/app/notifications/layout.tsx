@@ -14,5 +14,5 @@ export default async function NotificationsLayout({
   const member = await getCurrentMember();
   if (!member) redirect("/setup");
 
-  return <AppLayout>{children}</AppLayout>;
+  return <AppLayout title="通知">{children}</AppLayout>;
 }

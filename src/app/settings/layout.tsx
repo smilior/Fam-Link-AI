@@ -10,5 +10,5 @@ export default async function SettingsLayout({
   const session = await getServerSession();
   if (!session) redirect("/login");
 
-  return <AppLayout>{children}</AppLayout>;
+  return <AppLayout title="設定">{children}</AppLayout>;
 }
