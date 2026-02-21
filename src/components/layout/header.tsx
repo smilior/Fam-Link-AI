@@ -19,7 +19,7 @@ export async function Header({ title, showBell, children }: Props) {
         </h1>
       ) : (
         <span className="font-bold text-lg bg-gradient-to-r from-brand-500 to-brand-600 bg-clip-text text-transparent">
-          Fam-Link
+          Tsunagu
         </span>
       )}
       <div className="flex items-center gap-1">

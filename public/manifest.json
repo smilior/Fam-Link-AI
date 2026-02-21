@@ -1,7 +1,7 @@
 {
-  "name": "Fam-Link",
-  "short_name": "Fam-Link",
-  "description": "家族の予定をひとつに。4人家族専用の共有カレンダー＆コミュニケーションアプリ。",
+  "name": "Tsunagu",
+  "short_name": "Tsunagu",
+  "description": "家族をつなぐ共有カレンダー＆コミュニケーションアプリ。",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#f8fafc",
