@@ -367,46 +367,61 @@ export async function getMonthEvents(
   const startOfMonth = new Date(year, month - 1, 1).getTime();
   const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999).getTime();
 
-  // 1. Regular events (no recurrence, no parent) that overlap the month
-  const regularEvents = await db
-    .select()
-    .from(schema.event)
-    .where(
-      and(
-        eq(schema.event.familyGroupId, familyGroupId),
-        isNull(schema.event.recurrenceRule),
-        isNull(schema.event.parentEventId),
-        lte(schema.event.startAt, endOfMonth),
-        gte(schema.event.endAt, startOfMonth)
-      )
-    );
-
-  // 2. Recurring master events that could have occurrences in this month
-  const recurringMasters = await db
-    .select()
-    .from(schema.event)
-    .where(
-      and(
-        eq(schema.event.familyGroupId, familyGroupId),
-        isNotNull(schema.event.recurrenceRule),
-        isNull(schema.event.parentEventId),
-        lte(schema.event.startAt, endOfMonth),
-        or(
-          isNull(schema.event.recurrenceEndAt),
-          gte(schema.event.recurrenceEndAt, startOfMonth)
+  // Phase 1: Fetch regular events and recurring masters in parallel
+  const [regularEvents, recurringMasters] = await Promise.all([
+    db
+      .select()
+      .from(schema.event)
+      .where(
+        and(
+          eq(schema.event.familyGroupId, familyGroupId),
+          isNull(schema.event.recurrenceRule),
+          isNull(schema.event.parentEventId),
+          lte(schema.event.startAt, endOfMonth),
+          gte(schema.event.endAt, startOfMonth)
         )
-      )
-    );
+      ),
+    db
+      .select()
+      .from(schema.event)
+      .where(
+        and(
+          eq(schema.event.familyGroupId, familyGroupId),
+          isNotNull(schema.event.recurrenceRule),
+          isNull(schema.event.parentEventId),
+          lte(schema.event.startAt, endOfMonth),
+          or(
+            isNull(schema.event.recurrenceEndAt),
+            gte(schema.event.recurrenceEndAt, startOfMonth)
+          )
+        )
+      ),
+  ]);
 
-  // 3. Exceptions for these masters
   const masterIds = recurringMasters.map((m) => m.id);
-  const allExceptions =
+  const regularIds = regularEvents.map((e) => e.id);
+
+  // Phase 2: Fetch exceptions + regular/master members in parallel
+  const [allExceptions, regularEventMembers, masterEventMembers] = await Promise.all([
     masterIds.length > 0
-      ? await db
+      ? db
           .select()
           .from(schema.event)
           .where(inArray(schema.event.parentEventId, masterIds))
-      : [];
+      : Promise.resolve([]),
+    regularIds.length > 0
+      ? db
+          .select()
+          .from(schema.eventMember)
+          .where(inArray(schema.eventMember.eventId, regularIds))
+      : Promise.resolve([]),
+    masterIds.length > 0
+      ? db
+          .select()
+          .from(schema.eventMember)
+          .where(inArray(schema.eventMember.eventId, masterIds))
+      : Promise.resolve([]),
+  ]);
 
   // Build exception map: masterId → exceptionDate → exception event
   const exceptionMap = new Map<string, Map<number, (typeof allExceptions)[0]>>();
@@ -418,24 +433,25 @@ export async function getMonthEvents(
     exceptionMap.get(exc.parentEventId)!.set(exc.exceptionDate!, exc);
   });
 
-  // 4. Collect all real event IDs for member lookup
+  // Phase 3: Fetch exception members (needs exception IDs from phase 2)
   const realExceptions = allExceptions.filter((e) => !e.isDeleted);
-  const allRealIds = [
-    ...regularEvents.map((e) => e.id),
-    ...realExceptions.map((e) => e.id),
-    ...masterIds, // master IDs needed for virtual occurrence member lookup
-  ];
-
-  const eventMembers =
-    allRealIds.length > 0
+  const exceptionIds = realExceptions.map((e) => e.id);
+  const exceptionEventMembers =
+    exceptionIds.length > 0
       ? await db
           .select()
           .from(schema.eventMember)
-          .where(inArray(schema.eventMember.eventId, allRealIds))
+          .where(inArray(schema.eventMember.eventId, exceptionIds))
       : [];
 
-  const membersOf = (id: string) =>
-    eventMembers.filter((em) => em.eventId === id).map((em) => em.memberId);
+  // Build O(1) member lookup Map
+  const membersByEventId = new Map<string, string[]>();
+  for (const em of [...regularEventMembers, ...masterEventMembers, ...exceptionEventMembers]) {
+    const arr = membersByEventId.get(em.eventId);
+    if (arr) arr.push(em.memberId);
+    else membersByEventId.set(em.eventId, [em.memberId]);
+  }
+  const membersOf = (id: string) => membersByEventId.get(id) ?? [];
 
   // 5. Build result: regular events
   const result: CalendarEvent[] = regularEvents.map((e) => ({

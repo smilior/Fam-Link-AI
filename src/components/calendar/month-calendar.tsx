@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { EventModal } from "./event-modal";
@@ -37,8 +37,8 @@ const RING: Record<string, string> = {
   yellow: "ring-daughter-200", green: "ring-son-200",
 };
 
-function primaryColor(memberIds: string[], members: FamilyMember[]): string {
-  const m = members.find((x) => x.id === memberIds[0]);
+function primaryColor(memberIds: string[], memberMap: Map<string, FamilyMember>): string {
+  const m = memberMap.get(memberIds[0]);
   return m?.color ?? "all";
 }
 
@@ -122,6 +122,11 @@ type ScopeTarget = {
 // ── Component ─────────────────────────────────────────────────────────────────
 export function MonthCalendar({ year, month, events, members, currentMember }: Props) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const memberMap = useMemo(
+    () => new Map(members.map((m) => [m.id, m])),
+    [members]
+  );
   const [selDay, setSelDay]           = useState<number | null>(null);
   const [filter, setFilter]           = useState<string[]>([]);
   const [showCreate, setShowCreate]   = useState(false);
@@ -371,7 +376,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
                 return (
                   <div key={ti} className="grid grid-cols-7 flex-shrink-0">
                     {pills.map(({ ev, sc, span }) => {
-                      const col  = primaryColor(ev.memberIds, members);
+                      const col  = primaryColor(ev.memberIds, memberMap);
                       const pill = PILL[col] ?? PILL.all;
                       const isRecurring = !!ev.recurrenceRule || !!ev.isVirtual || !!ev.parentEventId;
                       return (
@@ -491,7 +496,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
                         return a.startAt - b.startAt;
                       })
                       .map((ev) => {
-                        const col = primaryColor(ev.memberIds, members);
+                        const col = primaryColor(ev.memberIds, memberMap);
                         const t   = new Date(ev.startAt);
                         const te  = new Date(ev.endAt);
                         const isRecurring = !!ev.recurrenceRule || !!ev.isVirtual || !!ev.parentEventId;
@@ -528,7 +533,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
                                 </span>
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   {ev.memberIds.map((mid) => {
-                                    const m = members.find((x) => x.id === mid);
+                                    const m = memberMap.get(mid);
                                     if (!m) return null;
                                     return (
                                       <span
@@ -654,7 +659,7 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
           currentMember={currentMember}
           defaultDate={selDay !== null ? new Date(year, month - 1, selDay) : undefined}
           onClose={() => { setShowCreate(false); setEditEv(null); setExceptionMode(null); }}
-          onSaved={() => { setShowCreate(false); setEditEv(null); setExceptionMode(null); router.refresh(); }}
+          onSaved={() => { setShowCreate(false); setEditEv(null); setExceptionMode(null); startTransition(() => router.refresh()); }}
         />
       )}
     </div>

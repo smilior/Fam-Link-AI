@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1771675662023,
+      "tag": "0000_married_valkyrie",
+      "breakpoints": true
+    }
+  ]
+}
