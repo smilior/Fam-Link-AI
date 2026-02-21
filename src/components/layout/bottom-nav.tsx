@@ -43,7 +43,7 @@ export function BottomNav() {
           <Link
             key={item.href}
             href={item.href}
-            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[64px] relative"
+            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[84px] relative"
           >
             {/* Active top indicator */}
             <div
