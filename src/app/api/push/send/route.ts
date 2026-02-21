@@ -7,6 +7,36 @@ import { sendPushToMember } from "@/lib/push";
 // JST offset: +9 hours
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
+type EventRow = typeof schema.event.$inferSelect;
+
+function formatEventLine(ev: EventRow): string {
+  const startJST = new Date(ev.startAt + JST_OFFSET_MS);
+  const endJST = new Date(ev.endAt + JST_OFFSET_MS);
+
+  // Compare calendar days in JST
+  const startDay = Math.floor((ev.startAt + JST_OFFSET_MS) / 86400000);
+  const endDay = Math.floor((ev.endAt + JST_OFFSET_MS) / 86400000);
+  const isMultiDay = endDay > startDay;
+
+  const sm = startJST.getUTCMonth() + 1;
+  const sd = startJST.getUTCDate();
+  const em = endJST.getUTCMonth() + 1;
+  const ed = endJST.getUTCDate();
+  const sh = String(startJST.getUTCHours()).padStart(2, "0");
+  const smin = String(startJST.getUTCMinutes()).padStart(2, "0");
+
+  if (ev.isAllDay) {
+    if (isMultiDay) return `・${sm}/${sd}〜${em}/${ed} ${ev.title}`;
+    return `・${ev.title}（終日）`;
+  }
+
+  if (isMultiDay) {
+    return `・${sm}/${sd} ${sh}:${smin}〜 ${ev.title}`;
+  }
+
+  return `・${sh}:${smin} ${ev.title}`;
+}
+
 function getTodayEndJST(): number {
   const nowJST = Date.now() + JST_OFFSET_MS;
   const jstDate = new Date(nowJST);
@@ -80,7 +110,7 @@ export async function POST(req: NextRequest) {
 
       // Send to each member (no dedup — each cron call reflects current remaining events)
       for (const [memberId, memberEvents] of memberEventMap) {
-        const titleList = memberEvents.map((e) => `・${e.title}`).join("\n");
+        const titleList = memberEvents.map(formatEventLine).join("\n");
         const body = `${memberEvents.length}件の予定があります\n${titleList}`;
 
         await sendPushToMember(memberId, {
