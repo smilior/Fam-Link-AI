@@ -16,11 +16,11 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="mb-2">
           <span className="text-3xl font-bold bg-gradient-to-r from-brand-500 to-brand-600 bg-clip-text text-transparent">
-            Fam-Link
+            Tsunagu
           </span>
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-10">
-          コネクト・ファミリー・ハブ
+          家族をつなぐ
         </p>
 
         {/* 4-Color Dots */}

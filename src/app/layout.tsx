@@ -15,13 +15,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Fam-Link — コネクト・ファミリー・ハブ",
-  description: "家族の予定をひとつに。4人家族専用の共有カレンダー＆コミュニケーションアプリ。",
+  title: "Tsunagu — 家族をつなぐカレンダー",
+  description: "家族の予定をひとつに。家族をつなぐ共有カレンダー＆コミュニケーションアプリ。",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Fam-Link",
+    title: "Tsunagu",
   },
 };
 

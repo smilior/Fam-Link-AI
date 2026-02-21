@@ -5,10 +5,10 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-4 bg-slate-50">
       <div className="text-center space-y-4">
         <h1 className="text-4xl font-bold bg-gradient-to-r from-brand-500 to-brand-600 bg-clip-text text-transparent">
-          Fam-Link
+          Tsunagu
         </h1>
         <p className="text-slate-500 text-lg">
-          コネクト・ファミリー・ハブ
+          家族をつなぐ
         </p>
       </div>
       <div className="flex items-center gap-3">
