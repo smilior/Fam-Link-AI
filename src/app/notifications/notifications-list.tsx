@@ -41,8 +41,6 @@ export function NotificationsList({ notifications, markAllRead }: Props) {
   const router = useRouter();
   const [marking, setMarking] = useState(false);
 
-  const hasUnread = notifications.some((n) => !n.isRead);
-
   const handleMarkAll = async () => {
     setMarking(true);
     await markAllRead();
@@ -54,7 +52,7 @@ export function NotificationsList({ notifications, markAllRead }: Props) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
         <Bell className="w-10 h-10 opacity-30" />
-        <p className="text-sm">通知はまだありません</p>
+        <p className="text-sm">未読の通知はありません</p>
       </div>
     );
   }
@@ -73,19 +71,17 @@ export function NotificationsList({ notifications, markAllRead }: Props) {
 
   return (
     <div className="space-y-4">
-      {hasUnread && (
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleMarkAll}
-            disabled={marking}
-            className="text-brand-500 font-medium"
-          >
-            {marking ? "処理中..." : "すべて既読"}
-          </Button>
-        </div>
-      )}
+      <div className="flex justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleMarkAll}
+          disabled={marking}
+          className="text-brand-500 font-medium"
+        >
+          {marking ? "処理中..." : "すべて既読にする"}
+        </Button>
+      </div>
 
       {groups.map((group) => (
         <div key={group.label} className="space-y-2">
@@ -96,11 +92,7 @@ export function NotificationsList({ notifications, markAllRead }: Props) {
             {group.items.map((n) => (
               <div
                 key={n.id}
-                className={`rounded-xl px-4 py-3 ${
-                  n.isRead
-                    ? "bg-white dark:bg-slate-800"
-                    : "bg-brand-50 dark:bg-brand-900/20 border-l-4 border-brand-500"
-                }`}
+                className="rounded-xl px-4 py-3 bg-brand-50 dark:bg-brand-900/20 border-l-4 border-brand-500"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">

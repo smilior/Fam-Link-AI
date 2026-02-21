@@ -25,7 +25,12 @@ export async function getNotifications() {
   return db
     .select()
     .from(schema.notificationLog)
-    .where(eq(schema.notificationLog.memberId, memberId))
+    .where(
+      and(
+        eq(schema.notificationLog.memberId, memberId),
+        eq(schema.notificationLog.isRead, 0)
+      )
+    )
     .orderBy(desc(schema.notificationLog.createdAt))
     .limit(50);
 }
