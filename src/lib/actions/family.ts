@@ -281,6 +281,41 @@ export async function updateMemberDisplayName(memberId: string, displayName: str
     .where(eq(schema.familyMember.id, memberId));
 }
 
+export async function deleteNonUserMember(targetMemberId: string) {
+  const session = await getServerSession();
+  if (!session?.user) redirect("/login");
+
+  const db = getDb();
+
+  // 操作者のmemberIdとfamilyGroupIdを取得
+  const me = await db
+    .select({ familyGroupId: schema.familyMember.familyGroupId })
+    .from(schema.familyMember)
+    .where(eq(schema.familyMember.userId, session.user.id))
+    .get();
+  if (!me) throw new Error("メンバーが見つかりません");
+
+  // 削除対象がアカウントなし かつ 同じファミリーグループであることを確認
+  const target = await db
+    .select()
+    .from(schema.familyMember)
+    .where(
+      and(
+        eq(schema.familyMember.id, targetMemberId),
+        eq(schema.familyMember.familyGroupId, me.familyGroupId),
+        isNull(schema.familyMember.userId)
+      )
+    )
+    .get();
+  if (!target) throw new Error("削除できないメンバーです");
+
+  // 関連データを削除してからメンバーを削除
+  await db.delete(schema.eventMember).where(eq(schema.eventMember.memberId, targetMemberId));
+  await db.delete(schema.pushSubscription).where(eq(schema.pushSubscription.memberId, targetMemberId));
+  await db.delete(schema.notificationLog).where(eq(schema.notificationLog.memberId, targetMemberId));
+  await db.delete(schema.familyMember).where(eq(schema.familyMember.id, targetMemberId));
+}
+
 export async function deleteMyAccount() {
   const session = await getServerSession();
   if (!session?.user) redirect("/login");
