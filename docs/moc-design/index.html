@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="ja" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Fam-Link-AI — コネクト・ファミリー・ハブ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Noto Sans JP', 'sans-serif'],
+            mono: ['Inter', 'monospace'],
+          },
+          colors: {
+            brand: { 50:'#EEF2FF',100:'#E0E7FF',200:'#C7D2FE',400:'#818CF8',500:'#6366F1',600:'#4F46E5',700:'#4338CA' },
+            papa: { 50:'#EFF6FF',100:'#DBEAFE',200:'#BFDBFE',400:'#60A5FA',500:'#3B82F6',600:'#2563EB',700:'#1D4ED8' },
+            mama: { 50:'#FDF2F8',100:'#FCE7F3',200:'#FBCFE8',400:'#F472B6',500:'#EC4899',600:'#DB2777',700:'#BE185D' },
+            daughter: { 50:'#FEFCE8',100:'#FEF9C3',200:'#FEF08A',400:'#FACC15',500:'#EAB308',600:'#CA8A04',700:'#A16207' },
+            son: { 50:'#F0FDF4',100:'#DCFCE7',200:'#BBF7D0',400:'#4ADE80',500:'#22C55E',600:'#16A34A',700:'#15803D' },
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body { font-feature-settings: 'palt'; }
+    .font-mono, .tabular-nums { font-feature-settings: 'tnum'; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Screen transitions */
+    .screen { display: none; animation: fadeSlideIn 0.25s ease-out; }
+    .screen.active { display: block; }
+    @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Modal slide-up */
+    .modal-overlay { opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal-panel { transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
+    .modal-overlay.open .modal-panel { transform: translateY(0); }
+
+    /* Login dots animation */
+    @keyframes dotPulse { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.4); opacity: 1; } }
+    .dot-anim-1 { animation: dotPulse 1.6s ease-in-out infinite; animation-delay: 0s; }
+    .dot-anim-2 { animation: dotPulse 1.6s ease-in-out infinite; animation-delay: 0.15s; }
+    .dot-anim-3 { animation: dotPulse 1.6s ease-in-out infinite; animation-delay: 0.3s; }
+    .dot-anim-4 { animation: dotPulse 1.6s ease-in-out infinite; animation-delay: 0.45s; }
+
+    /* Stamp bounce */
+    @keyframes stampBounce { 0% { transform: scale(0); } 60% { transform: scale(1.3); } 100% { transform: scale(1); } }
+    .stamp-bounce { animation: stampBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+    /* Scan line */
+    @keyframes scanLine { 0% { top: 0; } 100% { top: calc(100% - 2px); } }
+    .scan-line { animation: scanLine 2s ease-in-out infinite alternate; }
+
+    /* Confetti */
+    @keyframes confettiFall { 0% { transform: translateY(-10px) rotate(0deg); opacity: 1; } 100% { transform: translateY(400px) rotate(720deg); opacity: 0; } }
+    .confetti { animation: confettiFall 2s ease-out forwards; }
+
+    /* Progress bar fill */
+    @keyframes progressFill { from { width: 0; } }
+    .progress-fill { animation: progressFill 1s ease-out; }
+
+    /* Full-height calendar screen */
+    #view-calendar.active { display: flex !important; flex-direction: column; height: 100%; }
+    #cal-body { display: flex; flex-direction: column; }
+    .week-row {
+      flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; cursor: pointer;
+      border-bottom: 1px solid #e2e8f0;
+      background-size: calc(100% / 7) 100%;
+      background-image: linear-gradient(to right, transparent calc(100% - 1px), #f1f5f9 1px);
+    }
+    .dark .week-row { border-color: #334155; background-image: linear-gradient(to right, transparent calc(100% - 1px), #1e293b 1px); }
+    .week-nums { display: grid; grid-template-columns: repeat(7, 1fr); flex-shrink: 0; }
+    .week-nums > div { padding: 3px 0 1px 4px; font-size: 13px; cursor: pointer; }
+    .ev-track { display: grid; grid-template-columns: repeat(7, 1fr); flex-shrink: 0; }
+    .ev-bar {
+      font-size: 10.5px; line-height: 1.45; font-weight: 500;
+      padding: 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      border-radius: 3px; margin: 0 1px 1px 1px; cursor: pointer;
+    }
+    .ev-bar.sp-s { border-radius: 3px 0 0 3px; margin-right: 0; }
+    .ev-bar.sp-m { border-radius: 0; margin-left: 0; margin-right: 0; font-size: 0; }
+    .ev-bar.sp-e { border-radius: 0 3px 3px 0; margin-left: 0; font-size: 0; }
+
+    /* Phone frame for desktop */
+    @media (min-width: 768px) {
+      body { background: linear-gradient(135deg, #e0e7ff 0%, #f1f5f9 50%, #fdf2f8 100%); display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 24px 0; }
+      #phone-frame { width: 390px; min-height: 844px; border-radius: 2rem; box-shadow: 0 25px 60px -12px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05); overflow: hidden; position: relative; }
+    }
+    @media (max-width: 767px) {
+      #phone-frame { min-height: 100vh; min-height: 100dvh; }
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans antialiased">
+
+<div id="phone-frame" class="bg-slate-50 dark:bg-slate-900 relative overflow-hidden flex flex-col" style="height:844px;">
+
+  <!-- ==================== LOGIN SCREEN ==================== -->
+  <section id="screen-login" class="absolute inset-0 z-50 flex flex-col items-center justify-center px-8 bg-slate-50 dark:bg-slate-900 transition-all duration-500">
+    <div class="text-center">
+      <!-- Logo -->
+      <div class="mb-2">
+        <span class="text-3xl font-bold bg-gradient-to-r from-brand-500 to-brand-600 bg-clip-text text-transparent">Fam-Link</span>
+      </div>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-10">コネクト・ファミリー・ハブ</p>
+
+      <!-- 4-Color Dots -->
+      <div class="flex items-center justify-center gap-3 mb-12">
+        <span class="w-3.5 h-3.5 rounded-full bg-papa-500 dot-anim-1"></span>
+        <span class="w-3.5 h-3.5 rounded-full bg-mama-500 dot-anim-2"></span>
+        <span class="w-3.5 h-3.5 rounded-full bg-daughter-500 dot-anim-3"></span>
+        <span class="w-3.5 h-3.5 rounded-full bg-son-500 dot-anim-4"></span>
+      </div>
+
+      <!-- Google Login Button -->
+      <button onclick="enterApp()" class="flex items-center gap-3 mx-auto px-6 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm hover:shadow-md transition-shadow min-h-[44px]">
+        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        <span class="text-base font-medium text-slate-700 dark:text-slate-200">Googleでログイン</span>
+      </button>
+
+      <p class="text-sm text-slate-400 dark:text-slate-500 mt-10">家族の予定をひとつに。</p>
+    </div>
+  </section>
+
+  <!-- ==================== APP SHELL ==================== -->
+  <div id="app-shell" class="flex flex-col h-full opacity-0 transition-opacity duration-500">
+
+    <!-- Header -->
+    <header class="flex-shrink-0 flex items-center justify-between px-5 h-14 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 z-30">
+      <h1 id="header-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">カレンダー</h1>
+      <div class="flex items-center gap-2">
+        <button id="header-action" class="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center" onclick="navigateTo('notifications')">
+          <i data-lucide="bell" class="w-5 h-5 text-slate-600 dark:text-slate-400"></i>
+          <span class="absolute top-1.5 right-1.5 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">3</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto hide-scrollbar">
+
+      <!-- ===== CALENDAR SCREEN (Full-height, JS-rendered) ===== -->
+      <section id="view-calendar" class="screen active">
+        <!-- Combined Header: Member Filter + Month Nav -->
+        <div class="flex items-center justify-between px-3 py-2 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
+          <!-- Member Avatars -->
+          <div class="flex items-center gap-1">
+            <button class="member-filter-av w-8 h-8 rounded-full bg-papa-500 text-white text-xs font-bold flex items-center justify-center ring-2 ring-papa-200 dark:ring-papa-500/30 transition-all" data-member="papa" onclick="toggleFilterAv(this)">太</button>
+            <button class="member-filter-av w-8 h-8 rounded-full bg-mama-500 text-white text-xs font-bold flex items-center justify-center ring-2 ring-mama-200 dark:ring-mama-500/30 transition-all" data-member="mama" onclick="toggleFilterAv(this)">花</button>
+            <button class="member-filter-av w-8 h-8 rounded-full bg-daughter-500 text-white text-xs font-bold flex items-center justify-center ring-2 ring-daughter-200 dark:ring-daughter-500/30 transition-all" data-member="daughter" onclick="toggleFilterAv(this)">さ</button>
+            <button class="member-filter-av w-8 h-8 rounded-full bg-son-500 text-white text-xs font-bold flex items-center justify-center ring-2 ring-son-200 dark:ring-son-500/30 transition-all" data-member="son" onclick="toggleFilterAv(this)">陸</button>
+          </div>
+          <!-- Month Navigation -->
+          <div class="flex items-center gap-1">
+            <button onclick="changeMonth(-1)" class="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+            <h2 class="text-base font-bold min-w-[90px] text-center">2026年3月</h2>
+            <button onclick="changeMonth(1)" class="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+            <button onclick="goToday()" class="ml-1 px-2.5 py-1 text-sm font-medium text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-500/10 rounded-full min-h-[44px] flex items-center">今日</button>
+          </div>
+        </div>
+
+        <!-- Weekday Headers (Sunday-first) -->
+        <div class="grid grid-cols-7 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+          <div class="text-center text-sm font-medium text-red-500 py-1.5">日</div>
+          <div class="text-center text-sm font-medium text-slate-400 dark:text-slate-500 py-1.5">月</div>
+          <div class="text-center text-sm font-medium text-slate-400 dark:text-slate-500 py-1.5">火</div>
+          <div class="text-center text-sm font-medium text-slate-400 dark:text-slate-500 py-1.5">水</div>
+          <div class="text-center text-sm font-medium text-slate-400 dark:text-slate-500 py-1.5">木</div>
+          <div class="text-center text-sm font-medium text-slate-400 dark:text-slate-500 py-1.5">金</div>
+          <div class="text-center text-sm font-medium text-blue-500 py-1.5">土</div>
+        </div>
+
+        <!-- Calendar Body — week rows rendered by JavaScript -->
+        <div id="cal-body" class="flex-1 flex flex-col overflow-hidden min-h-0">
+          <!-- JS fills week rows here -->
+        </div>
+      </section>
+
+      <!-- ===== NOTIFICATIONS SCREEN ===== -->
+      <section id="view-notifications" class="screen">
+        <div class="px-5 py-4 pb-24">
+          <!-- Today -->
+          <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3">今日</p>
+          <!-- Notification 1 - Unread -->
+          <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-brand-50 dark:bg-brand-500/5 cursor-pointer" onclick="openEventDetail('sankan')">
+            <span class="w-2 h-2 rounded-full bg-brand-500 mt-2 flex-shrink-0"></span>
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <i data-lucide="calendar" class="w-4 h-4 text-brand-500"></i>
+                <span class="text-base font-medium">本日の予定: 授業参観</span>
+              </div>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">14:00 - ママ, さくら</p>
+              <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">3分前</p>
+            </div>
+          </div>
+          <!-- Notification 2 - Unread -->
+          <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-brand-50 dark:bg-brand-500/5 cursor-pointer">
+            <span class="w-2 h-2 rounded-full bg-brand-500 mt-2 flex-shrink-0"></span>
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <i data-lucide="check-square" class="w-4 h-4 text-amber-500"></i>
+                <span class="text-base font-medium">ToDoの期限: 持ち物準備</span>
+              </div>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">今日まで - さくら</p>
+              <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">1時間前</p>
+            </div>
+          </div>
+          <!-- Notification 3 - Unread -->
+          <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-brand-50 dark:bg-brand-500/5 cursor-pointer">
+            <span class="w-2 h-2 rounded-full bg-brand-500 mt-2 flex-shrink-0"></span>
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <i data-lucide="heart" class="w-4 h-4 text-red-500"></i>
+                <span class="text-base font-medium">パパがスタンプ: ありがとう</span>
+              </div>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">授業参観の予定に</p>
+              <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">2時間前</p>
+            </div>
+          </div>
+
+          <!-- Yesterday -->
+          <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3 mt-6">昨日</p>
+          <div class="flex items-start gap-3 p-3 mb-2 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+            <span class="w-2 h-2 mt-2 flex-shrink-0"></span>
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <i data-lucide="calendar-plus" class="w-4 h-4 text-brand-500"></i>
+                <span class="text-base font-medium text-slate-700 dark:text-slate-300">予定追加: お花見</span>
+              </div>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">3/22 - 全員</p>
+              <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">昨日 18:00</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 mb-2 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+            <span class="w-2 h-2 mt-2 flex-shrink-0"></span>
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <i data-lucide="check-circle" class="w-4 h-4 text-green-500"></i>
+                <span class="text-base font-medium text-slate-700 dark:text-slate-300">ToDo完了: ゴミ出し</span>
+              </div>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">パパが完了しました</p>
+              <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">昨日 7:30</p>
+            </div>
+          </div>
+
+          <!-- 3/9 -->
+          <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3 mt-6">3月9日</p>
+          <div class="flex items-start gap-3 p-3 mb-2 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+            <span class="w-2 h-2 mt-2 flex-shrink-0"></span>
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <i data-lucide="bell" class="w-4 h-4 text-slate-400"></i>
+                <span class="text-base font-medium text-slate-700 dark:text-slate-300">予定リマインド: サッカー試合</span>
+              </div>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">3/28 9:00 - 陸, パパ</p>
+              <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">3/9 12:00</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== SCAN SCREEN ===== -->
+      <section id="view-scan" class="screen">
+        <div class="px-5 py-4 pb-24">
+          <!-- Progress Steps -->
+          <div class="flex items-center gap-2 mb-8">
+            <div class="flex-1 h-1.5 rounded-full bg-brand-500"></div>
+            <div class="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700" id="scan-step2-bar"></div>
+            <div class="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700" id="scan-step3-bar"></div>
+          </div>
+
+          <!-- Step 1: Capture -->
+          <div id="scan-step1">
+            <h2 class="text-xl font-bold mb-4">お便りをスキャン</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">学校のお便りをカメラで撮影するか、画像を選択してください</p>
+
+            <!-- Camera Preview Area -->
+            <div class="relative w-full aspect-[3/4] rounded-lg bg-slate-200 dark:bg-slate-700 mb-6 overflow-hidden flex items-center justify-center">
+              <div class="text-center">
+                <i data-lucide="camera" class="w-16 h-16 text-slate-400 dark:text-slate-500 mx-auto mb-3"></i>
+                <p class="text-sm text-slate-400 dark:text-slate-500">タップしてカメラを起動</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mb-6">
+              <button onclick="startScan()" class="flex items-center justify-center gap-2 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg min-h-[44px] hover:bg-slate-50">
+                <i data-lucide="camera" class="w-5 h-5 text-slate-600 dark:text-slate-400"></i>
+                <span class="text-base font-medium">撮影</span>
+              </button>
+              <button onclick="startScan()" class="flex items-center justify-center gap-2 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg min-h-[44px] hover:bg-slate-50">
+                <i data-lucide="image" class="w-5 h-5 text-slate-600 dark:text-slate-400"></i>
+                <span class="text-base font-medium">選択</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2: Analyzing (hidden) -->
+          <div id="scan-step2" class="hidden">
+            <div class="flex flex-col items-center justify-center py-16">
+              <div class="relative w-48 h-64 rounded-lg bg-slate-100 dark:bg-slate-700 mb-8 overflow-hidden">
+                <div class="absolute inset-0 bg-gradient-to-b from-transparent via-brand-500/20 to-transparent scan-line h-1"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <i data-lucide="scan-line" class="w-12 h-12 text-brand-500 animate-pulse"></i>
+                </div>
+              </div>
+              <p class="text-base font-medium text-slate-600 dark:text-slate-400 mb-4">お便りを読み取っています...</p>
+              <div class="w-48 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div class="h-full bg-brand-500 rounded-full progress-fill" style="width:70%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3: Results (hidden) -->
+          <div id="scan-step3" class="hidden">
+            <h2 class="text-xl font-bold mb-2">2件のイベントが見つかりました</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">内容を確認して、カレンダーに登録しましょう</p>
+
+            <!-- Result Card 1 -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 p-4 mb-3">
+              <div class="flex items-center gap-2 mb-3">
+                <i data-lucide="pencil" class="w-4 h-4 text-brand-500"></i>
+                <input type="text" value="授業参観" class="text-base font-medium bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 focus:border-brand-500 outline-none w-full py-0.5">
+              </div>
+              <div class="space-y-2 text-sm">
+                <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                  <i data-lucide="calendar" class="w-4 h-4"></i><span class="font-mono">2026-03-15</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                  <i data-lucide="clock" class="w-4 h-4"></i><span class="font-mono">14:00 - 15:00</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                  <i data-lucide="map-pin" class="w-4 h-4"></i><span>〇〇小学校 体育館</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                  <i data-lucide="backpack" class="w-4 h-4"></i><span>上履き, スリッパ</span>
+                </div>
+                <div class="flex items-center gap-2 mt-2">
+                  <i data-lucide="user" class="w-4 h-4 text-slate-400"></i>
+                  <select class="text-sm bg-transparent border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1 min-h-[44px]">
+                    <option>さくら（娘）</option><option>陸（息子）</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Result Card 2 -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 p-4 mb-6">
+              <div class="flex items-center gap-2 mb-3">
+                <i data-lucide="pencil" class="w-4 h-4 text-brand-500"></i>
+                <input type="text" value="遠足" class="text-base font-medium bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 focus:border-brand-500 outline-none w-full py-0.5">
+              </div>
+              <div class="space-y-2 text-sm">
+                <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                  <i data-lucide="calendar" class="w-4 h-4"></i><span class="font-mono">2026-03-22</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                  <i data-lucide="clock" class="w-4 h-4"></i><span class="font-mono">08:30 (終日)</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                  <i data-lucide="backpack" class="w-4 h-4"></i><span>水筒, お弁当, レジャーシート</span>
+                </div>
+                <div class="flex items-center gap-2 mt-2">
+                  <i data-lucide="user" class="w-4 h-4 text-slate-400"></i>
+                  <select class="text-sm bg-transparent border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1 min-h-[44px]">
+                    <option>さくら（娘）</option><option>陸（息子）</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <button onclick="completeScan()" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-medium rounded-lg min-h-[44px] transition-colors">
+              すべて登録する
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== HUB SCREEN ===== -->
+      <section id="view-hub" class="screen">
+        <!-- Hub Tabs -->
+        <div class="flex border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+          <button class="hub-tab flex-1 py-3 text-sm font-medium text-brand-600 dark:text-brand-400 border-b-2 border-brand-500" data-tab="todo" onclick="switchHubTab('todo')">ToDo</button>
+          <button class="hub-tab flex-1 py-3 text-sm font-medium text-slate-500 dark:text-slate-400 border-b-2 border-transparent" data-tab="archive" onclick="switchHubTab('archive')">アーカイブ</button>
+          <button class="hub-tab flex-1 py-3 text-sm font-medium text-slate-500 dark:text-slate-400 border-b-2 border-transparent" data-tab="timetable" onclick="switchHubTab('timetable')">時間割</button>
+          <button class="hub-tab flex-1 py-3 text-sm font-medium text-slate-500 dark:text-slate-400 border-b-2 border-transparent" data-tab="menu" onclick="switchHubTab('menu')">献立</button>
+        </div>
+
+        <!-- ToDo Content -->
+        <div id="hub-todo" class="px-5 py-4 pb-24">
+          <div class="flex items-center gap-3 mb-4">
+            <button class="text-sm font-medium px-3 py-1.5 rounded-full bg-brand-500 text-white min-h-[44px]">未完了 (5)</button>
+            <button class="text-sm font-medium px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 min-h-[44px]">完了済み (3)</button>
+          </div>
+
+          <div class="space-y-3">
+            <!-- ToDo 1 -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 border-l-4 border-l-mama-500 p-4 flex items-start gap-3">
+              <button class="mt-0.5 w-6 h-6 rounded border-2 border-slate-300 dark:border-slate-600 flex-shrink-0 flex items-center justify-center min-w-[44px] min-h-[44px] -m-2" onclick="completeTodo(this)"></button>
+              <div class="flex-1">
+                <p class="text-base font-medium">牛乳を買う</p>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">期限: 3/12</span>
+                  <span class="w-5 h-5 rounded-full bg-mama-500 text-white text-xs font-bold flex items-center justify-center">花</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ToDo 2 - urgent -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 border-l-4 border-l-daughter-500 p-4 flex items-start gap-3">
+              <button class="mt-0.5 w-6 h-6 rounded border-2 border-slate-300 dark:border-slate-600 flex-shrink-0 flex items-center justify-center min-w-[44px] min-h-[44px] -m-2" onclick="completeTodo(this)"></button>
+              <div class="flex-1">
+                <p class="text-base font-medium">持ち物準備（授業参観）</p>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="text-sm text-red-500 font-mono font-medium">期限: 今日!</span>
+                  <span class="w-5 h-5 rounded-full bg-daughter-500 text-white text-xs font-bold flex items-center justify-center">さ</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ToDo 3 -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 border-l-4 border-l-papa-500 p-4 flex items-start gap-3">
+              <button class="mt-0.5 w-6 h-6 rounded border-2 border-slate-300 dark:border-slate-600 flex-shrink-0 flex items-center justify-center min-w-[44px] min-h-[44px] -m-2" onclick="completeTodo(this)"></button>
+              <div class="flex-1">
+                <p class="text-base font-medium">出張の新幹線予約</p>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">期限: 3/15</span>
+                  <span class="w-5 h-5 rounded-full bg-papa-500 text-white text-xs font-bold flex items-center justify-center">太</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ToDo 4 -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 border-l-4 border-l-son-500 p-4 flex items-start gap-3">
+              <button class="mt-0.5 w-6 h-6 rounded border-2 border-slate-300 dark:border-slate-600 flex-shrink-0 flex items-center justify-center min-w-[44px] min-h-[44px] -m-2" onclick="completeTodo(this)"></button>
+              <div class="flex-1">
+                <p class="text-base font-medium">部屋の掃除</p>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">期限: 3/13</span>
+                  <span class="w-5 h-5 rounded-full bg-son-500 text-white text-xs font-bold flex items-center justify-center">陸</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ToDo 5 - urgent -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 border-l-4 border-l-mama-500 p-4 flex items-start gap-3">
+              <button class="mt-0.5 w-6 h-6 rounded border-2 border-slate-300 dark:border-slate-600 flex-shrink-0 flex items-center justify-center min-w-[44px] min-h-[44px] -m-2" onclick="completeTodo(this)"></button>
+              <div class="flex-1">
+                <p class="text-base font-medium">夕食の買い出し</p>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="text-sm text-red-500 font-mono font-medium">期限: 今日!</span>
+                  <span class="w-5 h-5 rounded-full bg-mama-500 text-white text-xs font-bold flex items-center justify-center">花</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Archive Content (hidden) -->
+        <div id="hub-archive" class="px-5 py-4 pb-24 hidden">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 overflow-hidden">
+              <div class="aspect-[4/3] bg-slate-200 dark:bg-slate-700 flex items-center justify-center"><i data-lucide="file-text" class="w-10 h-10 text-slate-400"></i></div>
+              <div class="p-3"><p class="text-sm font-medium">授業参観のお知らせ</p><p class="text-sm text-slate-400 font-mono">3/5</p></div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 overflow-hidden">
+              <div class="aspect-[4/3] bg-slate-200 dark:bg-slate-700 flex items-center justify-center"><i data-lucide="file-text" class="w-10 h-10 text-slate-400"></i></div>
+              <div class="p-3"><p class="text-sm font-medium">遠足のしおり</p><p class="text-sm text-slate-400 font-mono">3/1</p></div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 overflow-hidden">
+              <div class="aspect-[4/3] bg-slate-200 dark:bg-slate-700 flex items-center justify-center"><i data-lucide="file-text" class="w-10 h-10 text-slate-400"></i></div>
+              <div class="p-3"><p class="text-sm font-medium">3月の献立表</p><p class="text-sm text-slate-400 font-mono">2/28</p></div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 overflow-hidden">
+              <div class="aspect-[4/3] bg-slate-200 dark:bg-slate-700 flex items-center justify-center"><i data-lucide="file-text" class="w-10 h-10 text-slate-400"></i></div>
+              <div class="p-3"><p class="text-sm font-medium">保健だより</p><p class="text-sm text-slate-400 font-mono">2/25</p></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timetable Content (hidden) -->
+        <div id="hub-timetable" class="px-5 py-4 pb-24 hidden">
+          <div class="flex items-center gap-2 mb-4">
+            <button class="px-3 py-1.5 text-sm font-medium bg-daughter-50 dark:bg-daughter-500/10 text-daughter-700 dark:text-daughter-400 border-2 border-daughter-500 rounded-full min-h-[44px]">さくら</button>
+            <button class="px-3 py-1.5 text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 rounded-full min-h-[44px]">陸</button>
+          </div>
+          <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 overflow-hidden">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-slate-50 dark:bg-slate-700">
+                <th class="py-2 px-2 font-medium text-slate-500 dark:text-slate-400"></th>
+                <th class="py-2 px-1 font-medium text-slate-500 dark:text-slate-400">月</th>
+                <th class="py-2 px-1 font-medium text-slate-500 dark:text-slate-400">火</th>
+                <th class="py-2 px-1 font-medium text-slate-500 dark:text-slate-400">水</th>
+                <th class="py-2 px-1 font-medium text-slate-500 dark:text-slate-400">木</th>
+                <th class="py-2 px-1 font-medium text-slate-500 dark:text-slate-400">金</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                <tr><td class="py-2.5 px-2 font-medium text-slate-400">1</td><td class="py-2.5 px-1">国語</td><td class="py-2.5 px-1">算数</td><td class="py-2.5 px-1">理科</td><td class="py-2.5 px-1">国語</td><td class="py-2.5 px-1">社会</td></tr>
+                <tr><td class="py-2.5 px-2 font-medium text-slate-400">2</td><td class="py-2.5 px-1">算数</td><td class="py-2.5 px-1">国語</td><td class="py-2.5 px-1">社会</td><td class="py-2.5 px-1">算数</td><td class="py-2.5 px-1">理科</td></tr>
+                <tr><td class="py-2.5 px-2 font-medium text-slate-400">3</td><td class="py-2.5 px-1">体育</td><td class="py-2.5 px-1">音楽</td><td class="py-2.5 px-1">国語</td><td class="py-2.5 px-1">理科</td><td class="py-2.5 px-1">英語</td></tr>
+                <tr><td class="py-2.5 px-2 font-medium text-slate-400">4</td><td class="py-2.5 px-1">理科</td><td class="py-2.5 px-1">図工</td><td class="py-2.5 px-1">算数</td><td class="py-2.5 px-1">英語</td><td class="py-2.5 px-1">体育</td></tr>
+                <tr><td class="py-2.5 px-2 font-medium text-slate-400">5</td><td class="py-2.5 px-1">社会</td><td class="py-2.5 px-1">図工</td><td class="py-2.5 px-1">—</td><td class="py-2.5 px-1">道徳</td><td class="py-2.5 px-1">家庭</td></tr>
+                <tr><td class="py-2.5 px-2 font-medium text-slate-400">6</td><td class="py-2.5 px-1">英語</td><td class="py-2.5 px-1">—</td><td class="py-2.5 px-1">—</td><td class="py-2.5 px-1">学活</td><td class="py-2.5 px-1">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Menu Content (hidden) -->
+        <div id="hub-menu" class="px-5 py-4 pb-24 hidden">
+          <div class="space-y-3">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 p-4">
+              <p class="text-sm font-mono text-slate-400 mb-1">3月11日(水)</p>
+              <p class="text-base">ごはん、豚汁、鶏の唐揚げ、ほうれん草のおひたし、牛乳</p>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 p-4">
+              <p class="text-sm font-mono text-slate-400 mb-1">3月12日(木)</p>
+              <p class="text-base">コッペパン、クリームシチュー、ツナサラダ、みかん、牛乳</p>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 p-4">
+              <p class="text-sm font-mono text-slate-400 mb-1">3月13日(金)</p>
+              <p class="text-base">わかめごはん、味噌汁、焼き魚、切干大根、牛乳</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== SETTINGS SCREEN ===== -->
+      <section id="view-settings" class="screen">
+        <div class="px-5 py-4 pb-24 space-y-6">
+          <!-- Profile -->
+          <div>
+            <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3">プロフィール</p>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 p-4 flex items-center gap-4">
+              <span class="w-16 h-16 rounded-full bg-papa-500 text-white text-2xl font-bold flex items-center justify-center flex-shrink-0">太</span>
+              <div>
+                <p class="text-lg font-bold">田中太郎</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">papa@example.com</p>
+                <button class="text-sm text-brand-600 dark:text-brand-400 font-medium mt-1">プロフィール編集</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Family Group -->
+          <div>
+            <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3">家族グループ</p>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">グループ名</span>
+                <span class="text-base text-slate-500 dark:text-slate-400">田中家</span>
+              </div>
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">招待コード</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-base font-mono text-brand-600 dark:text-brand-400">FLK-A3B7</span>
+                  <button class="p-1"><i data-lucide="copy" class="w-4 h-4 text-slate-400"></i></button>
+                </div>
+              </div>
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">メンバー</span>
+                <div class="flex -space-x-1">
+                  <span class="w-7 h-7 rounded-full bg-papa-500 text-white text-xs font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-800">太</span>
+                  <span class="w-7 h-7 rounded-full bg-mama-500 text-white text-xs font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-800">花</span>
+                  <span class="w-7 h-7 rounded-full bg-daughter-500 text-white text-xs font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-800">さ</span>
+                  <span class="w-7 h-7 rounded-full bg-son-500 text-white text-xs font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-800">陸</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notification Settings -->
+          <div>
+            <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3">通知設定</p>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">プッシュ通知</span>
+                <button class="w-11 h-6 rounded-full bg-brand-500 relative transition-colors" onclick="toggleSwitch(this)"><span class="absolute right-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"></span></button>
+              </div>
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">朝の通知 (7:00)</span>
+                <button class="w-11 h-6 rounded-full bg-brand-500 relative transition-colors" onclick="toggleSwitch(this)"><span class="absolute right-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"></span></button>
+              </div>
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">昼の通知 (12:00)</span>
+                <button class="w-11 h-6 rounded-full bg-brand-500 relative transition-colors" onclick="toggleSwitch(this)"><span class="absolute right-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"></span></button>
+              </div>
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">午後の通知 (15:00)</span>
+                <button class="w-11 h-6 rounded-full bg-slate-300 dark:bg-slate-600 relative transition-colors" onclick="toggleSwitch(this)"><span class="absolute left-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"></span></button>
+              </div>
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">夕方の通知 (18:00)</span>
+                <button class="w-11 h-6 rounded-full bg-brand-500 relative transition-colors" onclick="toggleSwitch(this)"><span class="absolute right-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"></span></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Display Settings -->
+          <div>
+            <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3">表示設定</p>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">ダークモード</span>
+                <button id="dark-toggle" class="w-11 h-6 rounded-full bg-slate-300 dark:bg-brand-500 relative transition-colors" onclick="toggleDarkMode(this)"><span class="absolute left-0.5 dark:left-auto dark:right-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"></span></button>
+              </div>
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">週の開始日</span>
+                <span class="text-base text-slate-500 dark:text-slate-400">月曜日</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Other -->
+          <div>
+            <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3">その他</p>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
+              <div class="p-4 flex items-center justify-between">
+                <span class="text-base">バージョン</span>
+                <span class="text-sm text-slate-400 font-mono">v1.0.0</span>
+              </div>
+              <div class="p-4">
+                <button class="text-base text-red-500 font-medium">ログアウト</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== GOALS SCREEN ===== -->
+      <section id="view-goals" class="screen">
+        <div class="px-5 py-4 pb-24">
+          <!-- Goals -->
+          <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3">今週のゴール</p>
+          <div class="space-y-3 mb-8">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 p-4">
+              <div class="flex items-center gap-2 mb-2">
+                <i data-lucide="target" class="w-5 h-5 text-brand-500"></i>
+                <span class="text-base font-medium">家族の予定を全員が確認</span>
+              </div>
+              <div class="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1.5">
+                <div class="h-full bg-brand-500 rounded-full progress-fill" style="width:75%"></div>
+              </div>
+              <p class="text-sm text-slate-500 dark:text-slate-400">あと1人! <span class="font-mono">75%</span></p>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 p-4">
+              <div class="flex items-center gap-2 mb-2">
+                <i data-lucide="target" class="w-5 h-5 text-brand-500"></i>
+                <span class="text-base font-medium">ToDoを全部完了</span>
+              </div>
+              <div class="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1.5">
+                <div class="h-full bg-amber-500 rounded-full progress-fill" style="width:40%"></div>
+              </div>
+              <p class="text-sm text-slate-500 dark:text-slate-400">残り3件 <span class="font-mono">40%</span></p>
+            </div>
+          </div>
+
+          <!-- Badges -->
+          <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3">バッジコレクション</p>
+          <div class="grid grid-cols-4 gap-4">
+            <!-- Earned -->
+            <div class="flex flex-col items-center gap-1.5">
+              <div class="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-md"><i data-lucide="footprints" class="w-7 h-7 text-white"></i></div>
+              <span class="text-sm text-center font-medium">はじめの一歩</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5">
+              <div class="w-16 h-16 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-md"><i data-lucide="scan-line" class="w-7 h-7 text-white"></i></div>
+              <span class="text-sm text-center font-medium">スキャンマスター</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5">
+              <div class="w-16 h-16 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow-md"><i data-lucide="check-circle" class="w-7 h-7 text-white"></i></div>
+              <span class="text-sm text-center font-medium">ToDoコンプリート</span>
+            </div>
+            <!-- Locked -->
+            <div class="flex flex-col items-center gap-1.5">
+              <div class="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center opacity-40"><i data-lucide="crown" class="w-7 h-7 text-slate-400 dark:text-slate-500"></i></div>
+              <span class="text-sm text-center text-slate-400">???</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5">
+              <div class="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center opacity-40"><i data-lucide="heart" class="w-7 h-7 text-slate-400 dark:text-slate-500"></i></div>
+              <span class="text-sm text-center text-slate-400">???</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5">
+              <div class="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center opacity-40"><i data-lucide="flame" class="w-7 h-7 text-slate-400 dark:text-slate-500"></i></div>
+              <span class="text-sm text-center text-slate-400">???</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5">
+              <div class="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center opacity-40"><i data-lucide="camera" class="w-7 h-7 text-slate-400 dark:text-slate-500"></i></div>
+              <span class="text-sm text-center text-slate-400">???</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- FAB -->
+    <button id="fab-button" class="absolute bottom-20 right-5 w-14 h-14 bg-brand-500 hover:bg-brand-600 rounded-full shadow-lg flex items-center justify-center z-20 transition-all active:scale-95" onclick="openCreateEvent()">
+      <i data-lucide="plus" class="w-6 h-6 text-white"></i>
+    </button>
+
+    <!-- Bottom Tab Bar -->
+    <nav class="flex-shrink-0 flex items-stretch bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 z-30" style="padding-bottom: env(safe-area-inset-bottom, 0)">
+      <button class="tab-btn flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[64px] relative" data-view="calendar" onclick="navigateTo('calendar')">
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-brand-500 rounded-full tab-indicator"></div>
+        <i data-lucide="calendar" class="w-5 h-5 text-brand-500 tab-icon"></i>
+        <span class="text-sm font-medium text-brand-500 tab-label">カレンダー</span>
+      </button>
+      <button class="tab-btn flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[64px] relative" data-view="notifications" onclick="navigateTo('notifications')">
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-transparent rounded-full tab-indicator"></div>
+        <div class="relative">
+          <i data-lucide="bell" class="w-5 h-5 text-slate-400 dark:text-slate-500 tab-icon"></i>
+          <span class="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">3</span>
+        </div>
+        <span class="text-sm text-slate-400 dark:text-slate-500 tab-label">通知</span>
+      </button>
+      <button class="tab-btn flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[64px] relative" data-view="scan" onclick="navigateTo('scan')">
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-transparent rounded-full tab-indicator"></div>
+        <i data-lucide="scan-line" class="w-5 h-5 text-slate-400 dark:text-slate-500 tab-icon"></i>
+        <span class="text-sm text-slate-400 dark:text-slate-500 tab-label">スキャン</span>
+      </button>
+      <button class="tab-btn flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[64px] relative" data-view="hub" onclick="navigateTo('hub')">
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-transparent rounded-full tab-indicator"></div>
+        <i data-lucide="layout-grid" class="w-5 h-5 text-slate-400 dark:text-slate-500 tab-icon"></i>
+        <span class="text-sm text-slate-400 dark:text-slate-500 tab-label">ハブ</span>
+      </button>
+      <button class="tab-btn flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[64px] relative" data-view="settings" onclick="navigateTo('settings')">
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-transparent rounded-full tab-indicator"></div>
+        <i data-lucide="settings" class="w-5 h-5 text-slate-400 dark:text-slate-500 tab-icon"></i>
+        <span class="text-sm text-slate-400 dark:text-slate-500 tab-label">設定</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ==================== EVENT DETAIL MODAL ==================== -->
+  <div id="modal-event-detail" class="modal-overlay absolute inset-0 z-40 bg-black/50 flex items-end">
+    <div class="modal-panel w-full max-h-[90%] bg-white dark:bg-slate-800 rounded-t-2xl overflow-y-auto hide-scrollbar">
+      <!-- Drag Handle -->
+      <div class="flex justify-center pt-3 pb-1"><div class="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></div></div>
+      <!-- Header -->
+      <div class="flex items-center justify-between px-5 py-2">
+        <button onclick="closeModal('modal-event-detail')" class="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <span class="text-base font-bold">イベント詳細</span>
+        <button class="p-2 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center"><i data-lucide="pencil" class="w-5 h-5 text-slate-500"></i></button>
+      </div>
+      <!-- Content -->
+      <div class="px-5 pb-6">
+        <h2 id="detail-title" class="text-xl font-bold mb-4">授業参観</h2>
+        <div class="space-y-3 mb-6">
+          <div class="flex items-center gap-3 text-base"><i data-lucide="calendar" class="w-5 h-5 text-slate-400 flex-shrink-0"></i><span>2026年3月11日(水)</span></div>
+          <div class="flex items-center gap-3 text-base"><i data-lucide="clock" class="w-5 h-5 text-slate-400 flex-shrink-0"></i><span class="font-mono">14:00 - 15:00</span></div>
+          <div class="flex items-center gap-3 text-base"><i data-lucide="map-pin" class="w-5 h-5 text-slate-400 flex-shrink-0"></i><span>〇〇小学校</span></div>
+          <div class="flex items-center gap-3 text-base">
+            <i data-lucide="users" class="w-5 h-5 text-slate-400 flex-shrink-0"></i>
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-full bg-mama-500 text-white text-xs font-bold flex items-center justify-center">花</span>
+              <span class="w-7 h-7 rounded-full bg-daughter-500 text-white text-xs font-bold flex items-center justify-center">さ</span>
+              <span class="text-slate-500 dark:text-slate-400">ママ, さくら</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 text-base"><i data-lucide="folder" class="w-5 h-5 text-slate-400 flex-shrink-0"></i><span class="px-2 py-0.5 rounded-full bg-pink-50 dark:bg-pink-500/10 text-pink-700 dark:text-pink-400 text-sm font-medium">学校</span></div>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 mb-6">
+          <p class="text-sm text-slate-500 dark:text-slate-400 mb-1">メモ</p>
+          <p class="text-base">体育館で実施。上履き持参。カメラ撮影OK。</p>
+        </div>
+
+        <!-- Stamps -->
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mb-6">
+          <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3">スタンプ</p>
+          <div class="flex items-center gap-2">
+            <button onclick="sendStamp(this)" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] transition-colors">
+              <i data-lucide="heart" class="w-6 h-6 text-red-500"></i>
+              <span class="text-sm text-slate-500">ありがとう</span>
+            </button>
+            <button onclick="sendStamp(this)" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] transition-colors">
+              <i data-lucide="thumbs-up" class="w-6 h-6 text-blue-500"></i>
+              <span class="text-sm text-slate-500">了解</span>
+            </button>
+            <button onclick="sendStamp(this)" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] transition-colors">
+              <i data-lucide="zap" class="w-6 h-6 text-amber-500"></i>
+              <span class="text-sm text-slate-500">がんばれ</span>
+            </button>
+            <button onclick="sendStamp(this)" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] transition-colors">
+              <i data-lucide="coffee" class="w-6 h-6 text-violet-500"></i>
+              <span class="text-sm text-slate-500">おつかれ</span>
+            </button>
+            <button onclick="sendStamp(this)" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] transition-colors">
+              <i data-lucide="star" class="w-6 h-6 text-yellow-500"></i>
+              <span class="text-sm text-slate-500">いいね</span>
+            </button>
+          </div>
+          <!-- Sent stamps -->
+          <div class="flex items-center gap-2 mt-3">
+            <div class="flex items-center gap-1 px-2 py-1 rounded-full bg-red-50 dark:bg-red-500/10">
+              <i data-lucide="heart" class="w-4 h-4 text-red-500"></i>
+              <span class="text-sm text-red-600 dark:text-red-400">パパ</span>
+            </div>
+            <div class="flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10">
+              <i data-lucide="thumbs-up" class="w-4 h-4 text-blue-500"></i>
+              <span class="text-sm text-blue-600 dark:text-blue-400">陸</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat -->
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+          <p class="text-sm font-medium text-slate-400 dark:text-slate-500 mb-3">チャット</p>
+          <div class="space-y-3 mb-4">
+            <!-- Message from Mama -->
+            <div class="flex items-start gap-2">
+              <span class="w-8 h-8 rounded-full bg-mama-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">花</span>
+              <div>
+                <div class="flex items-center gap-2 mb-0.5">
+                  <span class="text-sm font-medium text-mama-600 dark:text-mama-400">ママ</span>
+                  <span class="text-sm text-slate-400 font-mono">3/10 10:00</span>
+                </div>
+                <div class="bg-slate-100 dark:bg-slate-700 rounded-lg rounded-tl-none px-3 py-2 max-w-[80%]">
+                  <p class="text-base">上履き新しいの買った？</p>
+                </div>
+              </div>
+            </div>
+            <!-- Message from Papa (self) -->
+            <div class="flex items-start gap-2 flex-row-reverse">
+              <span class="w-8 h-8 rounded-full bg-papa-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">太</span>
+              <div class="flex flex-col items-end">
+                <div class="flex items-center gap-2 mb-0.5 flex-row-reverse">
+                  <span class="text-sm font-medium text-papa-600 dark:text-papa-400">パパ</span>
+                  <span class="text-sm text-slate-400 font-mono">3/10 12:30</span>
+                </div>
+                <div class="bg-brand-50 dark:bg-brand-500/10 rounded-lg rounded-tr-none px-3 py-2 max-w-[80%]">
+                  <p class="text-base">まだ。今日仕事帰りに買ってくるね</p>
+                </div>
+              </div>
+            </div>
+            <!-- Message from Mama -->
+            <div class="flex items-start gap-2">
+              <span class="w-8 h-8 rounded-full bg-mama-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">花</span>
+              <div>
+                <div class="flex items-center gap-2 mb-0.5">
+                  <span class="text-sm font-medium text-mama-600 dark:text-mama-400">ママ</span>
+                  <span class="text-sm text-slate-400 font-mono">3/10 12:35</span>
+                </div>
+                <div class="bg-slate-100 dark:bg-slate-700 rounded-lg rounded-tl-none px-3 py-2 max-w-[80%]">
+                  <p class="text-base">ありがとう! サイズ22cmね</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Chat Input -->
+          <div class="flex items-center gap-2">
+            <button class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center">
+              <i data-lucide="image" class="w-5 h-5 text-slate-400"></i>
+            </button>
+            <input type="text" placeholder="メッセージを入力..." class="flex-1 h-11 px-3 bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-base outline-none focus:ring-2 focus:ring-brand-500 placeholder:text-slate-400">
+            <button class="p-2 rounded-lg bg-brand-500 hover:bg-brand-600 min-w-[44px] min-h-[44px] flex items-center justify-center">
+              <i data-lucide="send" class="w-5 h-5 text-white"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== EVENT CREATE MODAL ==================== -->
+  <div id="modal-event-create" class="modal-overlay absolute inset-0 z-40 bg-black/50 flex items-end">
+    <div class="modal-panel w-full max-h-[92%] bg-white dark:bg-slate-800 rounded-t-2xl overflow-y-auto hide-scrollbar">
+      <div class="flex justify-center pt-3 pb-1"><div class="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></div></div>
+      <div class="flex items-center justify-between px-5 py-2">
+        <button onclick="closeModal('modal-event-create')" class="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <span class="text-base font-bold">新しい予定</span>
+        <button onclick="closeModal('modal-event-create')" class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-md min-h-[44px]">保存</button>
+      </div>
+      <div class="px-5 pb-6 space-y-5">
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">タイトル <span class="text-red-500">*</span></label>
+          <input type="text" placeholder="予定のタイトル" class="w-full h-12 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-base outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 placeholder:text-slate-400">
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">日付 <span class="text-red-500">*</span></label>
+          <input type="date" value="2026-03-11" class="w-full h-12 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-base outline-none focus:ring-2 focus:ring-brand-500 font-mono">
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="allday" class="w-5 h-5 rounded accent-brand-500">
+          <label for="allday" class="text-base">終日</label>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">開始時刻</label>
+            <input type="time" value="10:00" class="w-full h-12 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-base outline-none focus:ring-2 focus:ring-brand-500 font-mono">
+          </div>
+          <div>
+            <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">終了時刻</label>
+            <input type="time" value="11:00" class="w-full h-12 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-base outline-none focus:ring-2 focus:ring-brand-500 font-mono">
+          </div>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">対象メンバー</label>
+          <div class="flex items-center gap-2">
+            <button class="member-select flex items-center gap-1.5 px-3 py-2 rounded-lg ring-2 ring-papa-500 bg-papa-50 dark:bg-papa-500/10 min-h-[44px]" onclick="toggleMemberSelect(this)">
+              <span class="w-6 h-6 rounded-full bg-papa-500 text-white text-xs font-bold flex items-center justify-center">太</span>
+              <span class="text-sm font-medium">パパ</span>
+            </button>
+            <button class="member-select flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 opacity-50 min-h-[44px]" onclick="toggleMemberSelect(this)">
+              <span class="w-6 h-6 rounded-full bg-mama-500 text-white text-xs font-bold flex items-center justify-center">花</span>
+              <span class="text-sm font-medium">ママ</span>
+            </button>
+            <button class="member-select flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 opacity-50 min-h-[44px]" onclick="toggleMemberSelect(this)">
+              <span class="w-6 h-6 rounded-full bg-daughter-500 text-white text-xs font-bold flex items-center justify-center">さ</span>
+              <span class="text-sm font-medium">さくら</span>
+            </button>
+            <button class="member-select flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 opacity-50 min-h-[44px]" onclick="toggleMemberSelect(this)">
+              <span class="w-6 h-6 rounded-full bg-son-500 text-white text-xs font-bold flex items-center justify-center">陸</span>
+              <span class="text-sm font-medium">陸</span>
+            </button>
+          </div>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">カテゴリ</label>
+          <select class="w-full h-12 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-base outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="">選択してください</option>
+            <option value="school">学校</option>
+            <option value="work">仕事</option>
+            <option value="home">家庭</option>
+            <option value="lesson">習い事</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">メモ</label>
+          <textarea rows="3" placeholder="メモを入力..." class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-base outline-none focus:ring-2 focus:ring-brand-500 placeholder:text-slate-400 resize-none"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DAY DETAIL MODAL ==================== -->
+  <div id="modal-day-detail" class="modal-overlay absolute inset-0 z-40 bg-black/50 flex items-end">
+    <div class="modal-panel w-full max-h-[85%] bg-white dark:bg-slate-800 rounded-t-2xl overflow-y-auto hide-scrollbar">
+      <div class="flex justify-center pt-3 pb-1"><div class="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></div></div>
+      <div class="flex items-center justify-between px-5 py-2">
+        <button onclick="closeModal('modal-day-detail')" class="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <span id="day-detail-title" class="text-base font-bold">3月11日 水曜日</span>
+        <button onclick="closeModal('modal-day-detail'); openCreateEvent();" class="p-2 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center"><i data-lucide="plus" class="w-5 h-5 text-brand-500"></i></button>
+      </div>
+      <div id="day-detail-events" class="px-5 pb-6">
+        <!-- Filled by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TOAST ==================== -->
+  <div id="toast" class="absolute top-4 left-4 right-4 z-50 opacity-0 -translate-y-full transition-all duration-300 pointer-events-none">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg border-l-4 border-l-green-500 flex items-center gap-3 px-4 py-3">
+      <i data-lucide="check-circle" class="w-5 h-5 text-green-500 flex-shrink-0"></i>
+      <span id="toast-message" class="text-sm font-medium">保存しました</span>
+    </div>
+  </div>
+
+</div><!-- end phone-frame -->
+
+<script>
+  // Initialize Lucide icons
+  lucide.createIcons();
+
+  // ===== Member Constants =====
+  const MEMBERS = {
+    papa:     { name: 'パパ',   initial: '太', bg: 'bg-papa-500',     dot: '#3B82F6', borderL: 'border-l-papa-500' },
+    mama:     { name: 'ママ',   initial: '花', bg: 'bg-mama-500',     dot: '#EC4899', borderL: 'border-l-mama-500' },
+    daughter: { name: 'さくら', initial: 'さ', bg: 'bg-daughter-500', dot: '#EAB308', borderL: 'border-l-daughter-500' },
+    son:      { name: '陸',     initial: '陸', bg: 'bg-son-500',      dot: '#22C55E', borderL: 'border-l-son-500' },
+  };
+  const WEEKDAYS_JP = ['日','月','火','水','木','金','土'];
+
+  // ===== Mock Event Data (March 2026) — flat array =====
+  // type: 'n' = normal (light pill), 'i' = important (dark pill), 'holiday' = red pill
+  const ALL_EVENTS = [
+    // Week 1: Mar 1-7
+    { day: 1, title: 'スイミング', time: '9:00-11:00', member: 'son', type: 'n', location: 'スイミングスクール' },
+    { day: 2, title: 'ポコロコ教室', time: '10:00-12:00', member: 'mama', type: 'n' },
+    { day: 3, title: '週次会議', time: '9:00-10:00', member: 'papa', type: 'n', location: 'オフィス' },
+    { day: 4, title: 'ライズ学習塾', time: '17:00-19:00', member: 'son', type: 'n', location: '進学塾' },
+    { day: 5, title: 'PTA役員会', time: '10:00-12:00', member: 'mama', type: 'n', location: '〇〇小学校' },
+    { day: 5, title: 'ピアノ教室', time: '16:00-17:00', member: 'daughter', type: 'n', location: '音楽教室' },
+    { day: 6, title: '生協取りに行く', time: '15:00', member: 'mama', type: 'n' },
+    { day: 7, title: 'サッカー練習', time: '9:00-12:00', member: 'son', type: 'n', location: '市民グラウンド' },
+    // Week 2: Mar 8-14
+    { day: 8, title: 'お花見計画', time: '10:00', member: 'all', type: 'n', location: '自宅' },
+    { day: 9, title: 'ポコロコ教室', time: '10:00-12:00', member: 'mama', type: 'n' },
+    { startDay: 9, endDay: 10, title: '出張（大阪）', time: '終日', member: 'papa', type: 'i', location: '大阪支社' },
+    { day: 11, title: '授業参観', time: '14:00-15:00', member: 'daughter', type: 'i', location: '〇〇小学校' },
+    { day: 11, title: 'ライズ休み', time: '終日', member: 'son', type: 'i' },
+    { day: 12, title: 'ピアノ教室', time: '16:00-17:00', member: 'daughter', type: 'n', location: '音楽教室' },
+    { day: 13, title: '生協取りに行く', time: '15:00', member: 'mama', type: 'n' },
+    { day: 13, title: '飲み会', time: '19:00-', member: 'papa', type: 'n', location: '新橋' },
+    { day: 14, title: 'サッカー試合', time: '9:00-12:00', member: 'son', type: 'i', location: '市民グラウンド' },
+    { day: 14, title: 'バレンタイン', time: '終日', member: 'all', type: 'n' },
+    // Week 3: Mar 15-21
+    { day: 15, title: 'ジャバ', time: '10:00-12:00', member: 'son', type: 'i' },
+    { day: 15, title: '家族ランチ', time: '12:00-', member: 'all', type: 'n', location: 'レストラン' },
+    { day: 16, title: 'ポコロコ教室', time: '10:00-12:00', member: 'mama', type: 'n' },
+    { day: 17, title: 'ヨガ教室', time: '10:00-11:00', member: 'mama', type: 'n', location: 'フィットネスジム' },
+    { day: 18, title: '習字道具、絵の具', time: '終日', member: 'daughter', type: 'i' },
+    { day: 18, title: 'ライズ休み', time: '終日', member: 'son', type: 'i' },
+    { startDay: 19, endDay: 20, title: 'しおり、お弁当', time: '終日', member: 'daughter', type: 'i' },
+    { day: 20, title: '生協取りに行く', time: '15:00', member: 'mama', type: 'n' },
+    { day: 20, title: '岩塚クリニック', time: '10:00', member: 'papa', type: 'n' },
+    // Week 4: Mar 22-28
+    { day: 22, title: 'お花見', time: '10:00-', member: 'all', type: 'i', location: '代々木公園' },
+    { day: 23, title: '春分の日', time: '終日', member: 'holiday', type: 'holiday' },
+    { day: 23, title: 'ポコロコ教室', time: '10:00-12:00', member: 'mama', type: 'n' },
+    { day: 24, title: '耳鼻科', time: '15:00', member: 'son', type: 'n' },
+    { day: 25, title: 'ライズ学習塾', time: '17:00-19:00', member: 'son', type: 'n', location: '進学塾' },
+    { day: 25, title: 'しおり授業参観', time: '14:00', member: 'daughter', type: 'n', location: '〇〇小学校' },
+    { day: 26, title: 'ゴルフ', time: '8:00-', member: 'papa', type: 'n', location: 'CCクラブ' },
+    { day: 27, title: '生協取りに行く', time: '15:00', member: 'mama', type: 'n' },
+    { day: 28, title: 'サッカー試合', time: '9:00-', member: 'son', type: 'n', location: '県立スタジアム' },
+    // Week 5: Mar 29-31 + Apr
+    { day: 29, title: '映画', time: '13:00', member: 'all', type: 'n', location: 'シネマ' },
+    { day: 30, title: 'ポコロコ教室', time: '10:00-12:00', member: 'mama', type: 'n' },
+    { day: 31, title: '美容院', time: '13:00-', member: 'mama', type: 'n', location: 'ヘアサロン' },
+  ];
+
+  // ===== Pill Color Styles (design-requirements.md カラーパレット準拠) =====
+  // Normal: member-100 bg + member-700 text, Important: member-600 bg + white text
+  const PILL_C = {
+    papa:     { n: { bg:'#DBEAFE', c:'#1D4ED8' }, i: { bg:'#2563EB', c:'#FFFFFF' } },
+    mama:     { n: { bg:'#FCE7F3', c:'#BE185D' }, i: { bg:'#DB2777', c:'#FFFFFF' } },
+    daughter: { n: { bg:'#FEF9C3', c:'#A16207' }, i: { bg:'#CA8A04', c:'#FFFFFF' } },
+    son:      { n: { bg:'#DCFCE7', c:'#15803D' }, i: { bg:'#16A34A', c:'#FFFFFF' } },
+    all:      { n: { bg:'#E0E7FF', c:'#4338CA' }, i: { bg:'#4F46E5', c:'#FFFFFF' } },
+    holiday:  { n: { bg:'#EF4444', c:'#FFFFFF' }, i: { bg:'#DC2626', c:'#FFFFFF' } },
+  };
+
+  function pillStyle(ev) {
+    const m = ev.member || 'all';
+    const s = PILL_C[m] || PILL_C.all;
+    const isI = ev.type === 'i' || ev.type === 'holiday';
+    return 'background:' + (isI ? s.i.bg : s.n.bg) + ';color:' + (isI ? s.i.c : s.n.c) + ';';
+  }
+
+  // ===== Calendar State =====
+  let currentYear = 2026;
+  let currentMonth = 3;
+  const TODAY_DAY = 11;
+  const TODAY_MONTH = 3;
+  const TODAY_YEAR = 2026;
+  let activeFilters = new Set(['papa','mama','daughter','son']);
+
+  // ===== Calendar Rendering (Week-row based with multi-day spanning) =====
+  function renderCalendar() {
+    const body = document.getElementById('cal-body');
+    body.innerHTML = '';
+
+    const firstDow = new Date(currentYear, currentMonth - 1, 1).getDay(); // 0=Sun
+    const dim = new Date(currentYear, currentMonth, 0).getDate();
+    const dimPrev = new Date(currentYear, currentMonth - 1, 0).getDate();
+
+    // Build weeks (Sunday-first)
+    const weeks = [];
+    let dayCounter = 1 - firstDow; // offset to start from Sunday
+
+    for (let w = 0; w < 6; w++) {
+      const week = [];
+      for (let d = 0; d < 7; d++) {
+        const actual = dayCounter + w * 7 + d;
+        let display, isCur;
+        if (actual < 1) { display = dimPrev + actual; isCur = false; }
+        else if (actual > dim) { display = actual - dim; isCur = false; }
+        else { display = actual; isCur = true; }
+        week.push({ display, actual, isCur, dow: d });
+      }
+      weeks.push(week);
+      // Stop if all remaining weeks are next month
+      if (dayCounter + (w + 1) * 7 > dim + 7) break;
+    }
+    // Trim if last week is entirely next month
+    while (weeks.length > 5 && weeks[weeks.length - 1].every(d => !d.isCur)) weeks.pop();
+
+    weeks.forEach(week => {
+      const wStart = week[0].actual;
+      const wEnd = week[6].actual;
+
+      // Week row container
+      const rowEl = document.createElement('div');
+      rowEl.className = 'week-row';
+
+      // Row-level click: tap any cell area to open day modal
+      const weekRef = week;
+      rowEl.onclick = (e) => {
+        const rect = rowEl.getBoundingClientRect();
+        const col = Math.min(6, Math.floor((e.clientX - rect.left) / (rect.width / 7)));
+        const d = weekRef[col];
+        if (d && d.isCur) openDayModal(d.display);
+      };
+
+      // Day numbers
+      const numsEl = document.createElement('div');
+      numsEl.className = 'week-nums';
+      week.forEach(d => {
+        const numEl = document.createElement('div');
+        const isToday = d.isCur && d.display === TODAY_DAY && currentMonth === TODAY_MONTH && currentYear === TODAY_YEAR;
+        const isSun = d.dow === 0;
+        const isSat = d.dow === 6;
+
+        if (isToday) {
+          numEl.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#6366F1;color:#fff;font-size:13px;font-weight:700;">' + d.display + '</span>';
+        } else {
+          let color = '#334155';
+          if (!d.isCur) color = '#CBD5E1';
+          else if (isSun) color = '#DC2626';
+          else if (isSat) color = '#2563EB';
+          numEl.innerHTML = '<span style="color:' + color + ';font-weight:500;">' + d.display + '</span>';
+        }
+        numsEl.appendChild(numEl);
+      });
+      rowEl.appendChild(numsEl);
+
+      // Collect events for this week
+      const weekEvts = getWeekEvents(wStart, wEnd, dim);
+      const tracks = allocateTracks(weekEvts);
+
+      tracks.slice(0, 4).forEach(track => {
+        const trackEl = document.createElement('div');
+        trackEl.className = 'ev-track';
+
+        let col = 0;
+        while (col < 7) {
+          if (track[col]) {
+            const ev = track[col];
+            let span = 1;
+            while (col + span < 7 && track[col + span] === ev) span++;
+
+            const pill = document.createElement('div');
+            pill.className = 'ev-bar';
+            pill.style.cssText = 'grid-column:' + (col + 1) + '/span ' + span + ';' + pillStyle(ev);
+            pill.textContent = ev.title;
+
+            // Multi-day rounding
+            if (ev._isMulti) {
+              const evActualStart = ev.startDay || ev.day;
+              const evActualEnd = ev.endDay || ev.day;
+              const isVisualStart = (evActualStart >= wStart);
+              const isVisualEnd = (evActualEnd <= wEnd);
+              if (isVisualStart && !isVisualEnd) pill.classList.add('sp-s');
+              else if (!isVisualStart && isVisualEnd) pill.classList.add('sp-e');
+              else if (!isVisualStart && !isVisualEnd) pill.classList.add('sp-m');
+            }
+
+            trackEl.appendChild(pill);
+            col += span;
+          } else {
+            col++;
+          }
+        }
+        rowEl.appendChild(trackEl);
+      });
+
+      body.appendChild(rowEl);
+    });
+
+    // Update month title
+    const titleEl = document.querySelector('#view-calendar h2');
+    if (titleEl) titleEl.textContent = currentYear + '年' + currentMonth + '月';
+  }
+
+  function getWeekEvents(wStart, wEnd, dim) {
+    if (currentMonth !== 3 || currentYear !== 2026) return [];
+    const evts = [];
+    ALL_EVENTS.forEach(ev => {
+      if (!(ev.member === 'all' || ev.member === 'holiday' || activeFilters.has(ev.member))) return;
+      const eStart = ev.startDay || ev.day;
+      const eEnd = ev.endDay || ev.day;
+      if (eEnd >= Math.max(wStart, 1) && eStart <= Math.min(wEnd, dim)) {
+        const startCol = Math.max(0, eStart - wStart);
+        const endCol = Math.min(6, eEnd - wStart);
+        evts.push({ ...ev, _startCol: startCol, _endCol: endCol, _isMulti: eStart !== eEnd });
+      }
+    });
+    return evts;
+  }
+
+  function allocateTracks(events) {
+    // Multi-day events first, then by start col
+    events.sort((a, b) => {
+      if (a._isMulti && !b._isMulti) return -1;
+      if (!a._isMulti && b._isMulti) return 1;
+      return a._startCol - b._startCol;
+    });
+    const tracks = [];
+    events.forEach(ev => {
+      let placed = false;
+      for (let t = 0; t < tracks.length; t++) {
+        let ok = true;
+        for (let c = ev._startCol; c <= ev._endCol; c++) { if (tracks[t][c]) { ok = false; break; } }
+        if (ok) {
+          for (let c = ev._startCol; c <= ev._endCol; c++) tracks[t][c] = ev;
+          placed = true; break;
+        }
+      }
+      if (!placed) {
+        const nt = Array(7).fill(null);
+        for (let c = ev._startCol; c <= ev._endCol; c++) nt[c] = ev;
+        tracks.push(nt);
+      }
+    });
+    return tracks;
+  }
+
+  // ===== Day Detail Modal =====
+  function openDayModal(day) {
+    const date = new Date(currentYear, currentMonth - 1, day);
+    const wd = WEEKDAYS_JP[date.getDay()];
+    document.getElementById('day-detail-title').textContent = currentMonth + '月' + day + '日 ' + wd + '曜日';
+
+    const container = document.getElementById('day-detail-events');
+    let events = [];
+    if (currentMonth === 3 && currentYear === 2026) {
+      events = ALL_EVENTS.filter(ev => {
+        const s = ev.startDay || ev.day;
+        const e = ev.endDay || ev.day;
+        return day >= s && day <= e;
+      });
+    }
+    const filtered = events.filter(ev => ev.member === 'all' || ev.member === 'holiday' || activeFilters.has(ev.member));
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-center">' +
+        '<i data-lucide="calendar-x" class="w-12 h-12 text-slate-300 dark:text-slate-600 mb-3"></i>' +
+        '<p class="text-base text-slate-400 dark:text-slate-500">この日の予定はありません</p>' +
+        '<button onclick="closeModal(\'modal-day-detail\'); openCreateEvent();" class="mt-4 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg min-h-[44px] transition-colors flex items-center gap-1.5">' +
+        '<i data-lucide="plus" class="w-4 h-4"></i>予定を追加</button></div>';
+    } else {
+      container.innerHTML = filtered.map(ev => {
+        const memberKey = (ev.member === 'all' || ev.member === 'holiday') ? null : ev.member;
+        const borderCls = memberKey ? MEMBERS[memberKey].borderL : (ev.member === 'holiday' ? 'border-l-red-500' : 'border-l-brand-500');
+        const avatarKeys = memberKey ? [memberKey] : (ev.member === 'holiday' ? [] : ['papa','mama','daughter','son']);
+        const avatars = avatarKeys.map(m => {
+          const mem = MEMBERS[m];
+          return '<span class="w-7 h-7 rounded-full ' + mem.bg + ' text-white text-xs font-bold flex items-center justify-center">' + mem.initial + '</span>';
+        }).join('');
+        const names = avatarKeys.map(m => MEMBERS[m].name).join(', ');
+        const timeStr = ev.time || '';
+        const locHtml = ev.location ? '<div class="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 mb-2"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i><span>' + ev.location + '</span></div>' : '';
+        return '<div class="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-slate-700 border-l-4 ' + borderCls + ' p-4 mb-3 cursor-pointer hover:shadow-lg transition-shadow" onclick="closeModal(\'modal-day-detail\'); openEventDetail();">' +
+          '<div class="flex items-start justify-between mb-2">' +
+          '<h3 class="text-base font-bold">' + ev.title + '</h3>' +
+          '<span class="text-sm font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap ml-2">' + timeStr + '</span></div>' +
+          locHtml +
+          '<div class="flex items-center gap-2"><div class="flex -space-x-1">' + avatars + '</div>' +
+          '<span class="text-sm text-slate-500 dark:text-slate-400">' + names + '</span></div></div>';
+      }).join('');
+    }
+
+    openModal('modal-day-detail');
+    lucide.createIcons();
+  }
+
+  // ===== Member Filter (Avatar Buttons) =====
+  function toggleFilterAv(btn) {
+    const member = btn.dataset.member;
+    if (activeFilters.has(member)) {
+      activeFilters.delete(member);
+      btn.classList.add('opacity-30', 'grayscale');
+      btn.classList.remove('ring-2');
+    } else {
+      activeFilters.add(member);
+      btn.classList.remove('opacity-30', 'grayscale');
+      btn.classList.add('ring-2');
+    }
+    renderCalendar();
+  }
+
+  // ===== Month Navigation =====
+  function changeMonth(dir) {
+    currentMonth += dir;
+    if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+    if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+    renderCalendar();
+  }
+
+  function goToday() {
+    currentYear = TODAY_YEAR;
+    currentMonth = TODAY_MONTH;
+    renderCalendar();
+  }
+
+  // ===== Navigation =====
+  const views = ['calendar', 'notifications', 'scan', 'hub', 'settings', 'goals'];
+  const headerTitles = {
+    calendar: 'カレンダー', notifications: '通知', scan: 'AIスキャン',
+    hub: 'ハブ', settings: '設定', goals: 'ゴール & リワード'
+  };
+
+  function navigateTo(viewName) {
+    // Hide all screens
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    // Show target
+    const target = document.getElementById('view-' + viewName);
+    if (target) {
+      target.classList.add('active');
+      // Re-trigger animation
+      target.style.animation = 'none';
+      target.offsetHeight;
+      target.style.animation = '';
+    }
+    // Update header
+    document.getElementById('header-title').textContent = headerTitles[viewName] || '';
+    // Update header action
+    const headerAction = document.getElementById('header-action');
+    if (viewName === 'calendar') {
+      headerAction.style.display = 'flex';
+      headerAction.innerHTML = '<i data-lucide="bell" class="w-5 h-5 text-slate-600 dark:text-slate-400"></i><span class="absolute top-1.5 right-1.5 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">3</span>';
+      headerAction.onclick = () => navigateTo('notifications');
+    } else if (viewName === 'goals') {
+      headerAction.style.display = 'flex';
+      headerAction.innerHTML = '<i data-lucide="arrow-left" class="w-5 h-5 text-slate-600 dark:text-slate-400"></i>';
+      headerAction.onclick = () => navigateTo('calendar');
+      headerAction.style.order = '-1';
+    } else {
+      headerAction.style.display = 'none';
+      headerAction.style.order = '';
+    }
+    // Update tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      const isActive = btn.dataset.view === viewName;
+      btn.querySelector('.tab-indicator').style.backgroundColor = isActive ? '#6366F1' : 'transparent';
+      btn.querySelector('.tab-icon').className = `w-5 h-5 tab-icon ${isActive ? 'text-brand-500' : 'text-slate-400 dark:text-slate-500'}`;
+      const label = btn.querySelector('.tab-label');
+      label.className = `text-sm tab-label ${isActive ? 'font-medium text-brand-500' : 'text-slate-400 dark:text-slate-500'}`;
+    });
+    // FAB visibility
+    const fab = document.getElementById('fab-button');
+    fab.style.display = (viewName === 'calendar' || viewName === 'hub') ? 'flex' : 'none';
+    // Re-create icons for new screen
+    lucide.createIcons();
+    // Render calendar when switching to calendar view
+    if (viewName === 'calendar') renderCalendar();
+  }
+
+  // ===== Login =====
+  function enterApp() {
+    const login = document.getElementById('screen-login');
+    const app = document.getElementById('app-shell');
+    login.style.opacity = '0';
+    login.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+      login.style.display = 'none';
+      app.style.opacity = '1';
+      navigateTo('calendar');
+    }, 400);
+  }
+
+  // (Calendar functions moved above navigation section)
+
+  // ===== Modals =====
+  function openModal(id) {
+    document.getElementById(id).classList.add('open');
+  }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+  }
+  function openEventDetail(type) {
+    openModal('modal-event-detail');
+  }
+  function openCreateEvent() {
+    openModal('modal-event-create');
+  }
+
+  // ===== Stamps =====
+  function sendStamp(btn) {
+    const icon = btn.querySelector('svg');
+    icon.classList.add('stamp-bounce');
+    setTimeout(() => icon.classList.remove('stamp-bounce'), 400);
+    showToast('スタンプを送信しました');
+  }
+
+  // ===== Toggle Switch =====
+  function toggleSwitch(btn) {
+    const isOn = btn.classList.contains('bg-brand-500');
+    const dot = btn.querySelector('span');
+    if (isOn) {
+      btn.classList.remove('bg-brand-500');
+      btn.classList.add('bg-slate-300', 'dark:bg-slate-600');
+      dot.classList.remove('right-0.5');
+      dot.classList.add('left-0.5');
+    } else {
+      btn.classList.remove('bg-slate-300', 'dark:bg-slate-600');
+      btn.classList.add('bg-brand-500');
+      dot.classList.remove('left-0.5');
+      dot.classList.add('right-0.5');
+    }
+  }
+
+  // ===== Dark Mode =====
+  function toggleDarkMode() {
+    document.documentElement.classList.toggle('dark');
+    lucide.createIcons();
+  }
+
+  // ===== Hub Tabs =====
+  function switchHubTab(tab) {
+    document.querySelectorAll('.hub-tab').forEach(t => {
+      const isActive = t.dataset.tab === tab;
+      t.className = `hub-tab flex-1 py-3 text-sm font-medium border-b-2 ${isActive ? 'text-brand-600 dark:text-brand-400 border-brand-500' : 'text-slate-500 dark:text-slate-400 border-transparent'}`;
+    });
+    ['todo', 'archive', 'timetable', 'menu'].forEach(t => {
+      document.getElementById('hub-' + t).classList.toggle('hidden', t !== tab);
+    });
+    lucide.createIcons();
+  }
+
+  // ===== Scan Steps =====
+  function startScan() {
+    document.getElementById('scan-step1').classList.add('hidden');
+    document.getElementById('scan-step2').classList.remove('hidden');
+    document.getElementById('scan-step2-bar').classList.add('bg-brand-500');
+    document.getElementById('scan-step2-bar').classList.remove('bg-slate-200', 'dark:bg-slate-700');
+    lucide.createIcons();
+    setTimeout(() => {
+      document.getElementById('scan-step2').classList.add('hidden');
+      document.getElementById('scan-step3').classList.remove('hidden');
+      document.getElementById('scan-step3-bar').classList.add('bg-brand-500');
+      document.getElementById('scan-step3-bar').classList.remove('bg-slate-200', 'dark:bg-slate-700');
+      lucide.createIcons();
+    }, 3000);
+  }
+
+  function completeScan() {
+    showToast('2件のイベントを登録しました');
+    setTimeout(() => navigateTo('calendar'), 1000);
+    // Reset scan
+    setTimeout(() => {
+      document.getElementById('scan-step1').classList.remove('hidden');
+      document.getElementById('scan-step2').classList.add('hidden');
+      document.getElementById('scan-step3').classList.add('hidden');
+      document.getElementById('scan-step2-bar').classList.remove('bg-brand-500');
+      document.getElementById('scan-step2-bar').classList.add('bg-slate-200');
+      document.getElementById('scan-step3-bar').classList.remove('bg-brand-500');
+      document.getElementById('scan-step3-bar').classList.add('bg-slate-200');
+    }, 1500);
+  }
+
+  // ===== ToDo Complete =====
+  function completeTodo(btn) {
+    const card = btn.closest('.bg-white, .dark\\:bg-slate-800').parentElement || btn.closest('[class*="border-l-4"]');
+    const parent = btn.parentElement;
+    btn.innerHTML = '<svg class="w-4 h-4 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-dasharray="20" stroke-dashoffset="0"><animate attributeName="stroke-dashoffset" from="20" to="0" dur="0.3s"/></path></svg>';
+    btn.classList.add('bg-green-100', 'border-green-500');
+    const title = parent.querySelector('p.font-medium');
+    if (title) {
+      title.classList.add('line-through', 'text-slate-400');
+    }
+    parent.classList.add('opacity-50');
+    showToast('ToDo完了!');
+  }
+
+  // ===== Member Select (Create Event) =====
+  function toggleMemberSelect(btn) {
+    const isActive = btn.classList.contains('ring-2');
+    if (isActive) {
+      btn.classList.remove('ring-2');
+      btn.classList.add('opacity-50');
+    } else {
+      btn.classList.add('ring-2');
+      btn.classList.remove('opacity-50');
+    }
+  }
+
+  // ===== Toast =====
+  function showToast(message) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toast-message').textContent = message;
+    toast.classList.remove('opacity-0', '-translate-y-full');
+    toast.classList.add('opacity-100', 'translate-y-0');
+    setTimeout(() => {
+      toast.classList.remove('opacity-100', 'translate-y-0');
+      toast.classList.add('opacity-0', '-translate-y-full');
+    }, 3000);
+  }
+
+  // ===== Initial Render =====
+  renderCalendar();
+</script>
+
+</body>
+</html>
