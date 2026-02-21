@@ -100,6 +100,17 @@
   animation: slideUpSheet 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+@keyframes calSwipeLeft {
+  from { transform: translateX(0);     opacity: 1; }
+  to   { transform: translateX(-24px); opacity: 0; }
+}
+@keyframes calSwipeRight {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(24px); opacity: 0; }
+}
+.cal-swipe-left  { animation: calSwipeLeft  0.18s ease-out forwards; pointer-events: none; }
+.cal-swipe-right { animation: calSwipeRight 0.18s ease-out forwards; pointer-events: none; }
+
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
