@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { EventModal } from "./event-modal";
@@ -132,6 +132,29 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
   const today = new Date();
   const isCurMon = today.getFullYear() === year && today.getMonth() === month - 1;
 
+  // ── Swipe gesture ──────────────────────────────────────────────────────────
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [swipeAnim, setSwipeAnim] = useState<"" | "cal-swipe-left" | "cal-swipe-right">("");
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+    if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return;
+    const animClass = dx < 0 ? "cal-swipe-left" : "cal-swipe-right";
+    setSwipeAnim(animClass);
+    setTimeout(() => {
+      setSwipeAnim("");
+      nav(dx < 0 ? 1 : -1);
+    }, 180);
+  };
+
   const nav = (d: number) => {
     let nm = month + d, ny = year;
     if (nm > 12) { nm = 1; ny++; }
@@ -262,7 +285,11 @@ export function MonthCalendar({ year, month, events, members, currentMember }: P
       </div>
 
       {/* ── Week rows ───────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white dark:bg-slate-900">
+      <div
+        className={`flex-1 flex flex-col min-h-0 overflow-hidden bg-white dark:bg-slate-900 ${swipeAnim}`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {weeks.map((week, wi) => {
           const tracks = allocate(weekEvents(week, events, filter));
           return (

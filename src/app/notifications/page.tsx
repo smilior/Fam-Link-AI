@@ -1,8 +1,12 @@
-export default function NotificationsPage() {
+import { getNotifications, markAllRead } from "@/lib/actions/notifications";
+import { NotificationsList } from "./notifications-list";
+
+export default async function NotificationsPage() {
+  const notifications = await getNotifications();
+
   return (
     <div className="max-w-lg mx-auto p-5">
-      <h1 className="text-xl font-bold mb-4">通知</h1>
-      <p className="text-muted-foreground text-sm">通知はまだありません</p>
+      <NotificationsList notifications={notifications} markAllRead={markAllRead} />
     </div>
   );
 }

@@ -9,10 +9,10 @@ import {
   deleteMyAccount,
 } from "@/lib/actions/family";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { MemberAvatar } from "@/components/member/member-avatar";
-import { Copy, Check, LogOut, Plus, X, Smartphone, Pencil, Mail, AlertTriangle } from "lucide-react";
+import { Copy, Check, LogOut, Plus, X, Smartphone, Pencil, Mail, AlertTriangle, Bell, BellOff } from "lucide-react";
 
 type Member = {
   id: string;
@@ -189,6 +189,119 @@ function MemberEdit({
         </Button>
       </div>
     </div>
+  );
+}
+
+// ── Push Notification Toggle ───────────────────────────────────────────────────
+function PushNotificationToggle() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Check current state on mount
+  const checkState = async () => {
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      setEnabled(false);
+      return;
+    }
+    if (Notification.permission !== "granted") {
+      setEnabled(false);
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    setEnabled(!!sub);
+  };
+
+  useEffect(() => { checkState(); }, []);
+
+  const handleEnable = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setError("通知の許可が必要です");
+        setLoading(false);
+        return;
+      }
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidPublicKey,
+      });
+
+      const json = sub.toJSON();
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint: sub.endpoint,
+          p256dh: json.keys?.p256dh,
+          auth: json.keys?.auth,
+        }),
+      });
+      setEnabled(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "エラーが発生しました");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDisable = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe();
+      await fetch("/api/push/subscribe", { method: "DELETE" });
+      setEnabled(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "エラーが発生しました");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (enabled === null) return null; // still loading
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+        通知
+      </h2>
+      <div className="bg-white dark:bg-slate-800 rounded-xl p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {enabled ? (
+              <Bell className="w-5 h-5 text-brand-500" />
+            ) : (
+              <BellOff className="w-5 h-5 text-slate-400" />
+            )}
+            <div>
+              <p className="text-sm font-medium">プッシュ通知</p>
+              <p className="text-xs text-muted-foreground">
+                {enabled ? "有効" : "無効"}
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant={enabled ? "outline" : "default"}
+            onClick={enabled ? handleDisable : handleEnable}
+            disabled={loading}
+          >
+            {loading ? "処理中..." : enabled ? "無効にする" : "有効にする"}
+          </Button>
+        </div>
+        {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+      </div>
+    </section>
   );
 }
 
@@ -477,6 +590,9 @@ export function SettingsClient({
           </div>
         )}
       </section>
+
+      {/* ── Push Notifications ───────────────────────────────────── */}
+      <PushNotificationToggle />
 
       {/* ── Account ──────────────────────────────────────────────── */}
       <section className="space-y-3">

@@ -17,6 +17,12 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Fam-Link — コネクト・ファミリー・ハブ",
   description: "家族の予定をひとつに。4人家族専用の共有カレンダー＆コミュニケーションアプリ。",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Fam-Link",
+  },
 };
 
 export default function RootLayout({
@@ -28,6 +34,19 @@ export default function RootLayout({
     <html lang="ja">
       <body className={`${notoSansJP.variable} ${inter.variable} font-sans antialiased`}>
         {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').catch(function(err) {
+                    console.warn('Service Worker registration failed:', err);
+                  });
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   );
