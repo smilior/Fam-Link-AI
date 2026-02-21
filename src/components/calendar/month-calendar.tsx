@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { EventModal } from "./event-modal";
+import { EventDetailModal } from "./event-detail-modal";
 import type { FamilyMember } from "@/lib/db/types";
 
 type EventWithMembers = {
@@ -51,6 +52,8 @@ export function MonthCalendar({
   const [editingEvent, setEditingEvent] = useState<EventWithMembers | null>(
     null
   );
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailEvent, setDetailEvent] = useState<EventWithMembers | null>(null);
 
   const getDaysInMonth = () => {
     const firstDay = new Date(year, month - 1, 1);
@@ -227,8 +230,8 @@ export function MonthCalendar({
                 <button
                   key={e.id}
                   onClick={() => {
-                    setEditingEvent(e);
-                    setShowEventModal(true);
+                    setDetailEvent(e);
+                    setShowDetailModal(true);
                   }}
                   className={`w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg mb-1 border-l-4 bg-white dark:bg-slate-800 shadow-sm ${BORDER_COLOR_MAP[memberColors[0] || ""] || "border-slate-300"}`}
                 >
@@ -255,6 +258,24 @@ export function MonthCalendar({
       >
         <Plus className="w-6 h-6" />
       </button>
+
+      {/* Event detail modal */}
+      {showDetailModal && detailEvent && (
+        <EventDetailModal
+          event={detailEvent}
+          members={members}
+          onClose={() => {
+            setShowDetailModal(false);
+            setDetailEvent(null);
+          }}
+          onEdit={() => {
+            setShowDetailModal(false);
+            setEditingEvent(detailEvent);
+            setDetailEvent(null);
+            setShowEventModal(true);
+          }}
+        />
+      )}
 
       {/* Event modal */}
       {showEventModal && (
