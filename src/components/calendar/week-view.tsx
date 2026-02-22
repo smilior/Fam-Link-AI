@@ -2,9 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { EventModal } from "./event-modal";
 import type { FamilyMember } from "@/lib/db/types";
+
+const EventModal = dynamic(() => import("./event-modal").then((m) => m.EventModal), { ssr: false });
 
 type EventWithMembers = {
   id: string;

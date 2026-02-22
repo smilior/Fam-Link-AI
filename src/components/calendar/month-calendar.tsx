@@ -2,12 +2,14 @@
 
 import { useState, useRef, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { ChevronLeft, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
-import { EventModal } from "./event-modal";
-import { EventDetailModal } from "./event-detail-modal";
 import type { FamilyMember } from "@/lib/db/types";
 import type { CalendarEvent } from "@/lib/actions/calendar";
 import { getHolidayMap } from "@/lib/holidays";
+
+const EventModal = dynamic(() => import("./event-modal").then((m) => m.EventModal), { ssr: false });
+const EventDetailModal = dynamic(() => import("./event-detail-modal").then((m) => m.EventDetailModal), { ssr: false });
 
 export type EventWithMembers = CalendarEvent;
 
