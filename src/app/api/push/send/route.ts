@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
-import { eq, and, gte, lt, inArray } from "drizzle-orm";
+import { eq, and, gte, lt } from "drizzle-orm";
 import { sendPushToMember } from "@/lib/push";
 
 // JST offset: +9 hours
@@ -91,29 +91,20 @@ export async function POST(req: NextRequest) {
 
       if (events.length === 0) continue;
 
-      // Get all event-member associations
-      const eventIds = events.map((e) => e.id);
-      const eventMembers = await db
-        .select()
-        .from(schema.eventMember)
-        .where(inArray(schema.eventMember.eventId, eventIds));
+      // Get all members of the group
+      const groupMembers = await db
+        .select({ id: schema.familyMember.id })
+        .from(schema.familyMember)
+        .where(eq(schema.familyMember.familyGroupId, group.id));
 
-      // Group events by memberId
-      const memberEventMap = new Map<string, typeof events>();
-      for (const em of eventMembers) {
-        if (!memberEventMap.has(em.memberId)) {
-          memberEventMap.set(em.memberId, []);
-        }
-        const event = events.find((e) => e.id === em.eventId);
-        if (event) memberEventMap.get(em.memberId)!.push(event);
-      }
+      if (groupMembers.length === 0) continue;
 
-      // Send to each member (no dedup — each cron call reflects current remaining events)
-      for (const [memberId, memberEvents] of memberEventMap) {
-        const titleList = memberEvents.map(formatEventLine).join("\n");
-        const body = `${memberEvents.length}件の予定があります\n${titleList}`;
+      // Send all events to every member in the group
+      const titleList = events.map(formatEventLine).join("\n");
+      const body = `${events.length}件の予定があります\n${titleList}`;
 
-        await sendPushToMember(memberId, {
+      for (const member of groupMembers) {
+        await sendPushToMember(member.id, {
           type: "today_schedule",
           title: "今日の予定",
           body,
